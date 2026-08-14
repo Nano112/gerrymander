@@ -64,6 +64,8 @@ func main() {
 		err = cmdInit(args)
 	case "status", "doctor":
 		err = cmdStatus(args)
+	case "service":
+		err = cmdService(args)
 	case "conflicts":
 		err = cmdConflicts(args)
 	case "up":
@@ -109,6 +111,7 @@ client (env: GERRY_API, GERRY_API_KEY):
   conflicts
   init   [--name P] [--zone Z]  scaffold a gerrymander.yaml here
   status                        doctor: daemon/DNS/proxy/trust checks + fixes
+  service install|status|…      run the daemon as a launchd agent (host mode)
   up     [-f gerrymander.yaml]  apply a project manifest
   down   [-f gerrymander.yaml]  release a project manifest
   mcp                           serve MCP over stdio
