@@ -89,9 +89,31 @@ func cmdUpdate(args []string) error {
 	return nil
 }
 
+// latestReleaseTag resolves the newest release WITHOUT the GitHub API:
+// /releases/latest answers with a redirect whose Location ends in the tag.
+// The API (60 unauthenticated requests/hour) is only a fallback, with
+// GITHUB_TOKEN honored when present.
 func latestReleaseTag() (string, error) {
-	c := &http.Client{Timeout: 15 * time.Second}
-	resp, err := c.Get("https://api.github.com/repos/Nano112/gerrymander/releases/latest")
+	c := &http.Client{
+		Timeout: 15 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	if resp, err := c.Get("https://github.com/Nano112/gerrymander/releases/latest"); err == nil {
+		loc := resp.Header.Get("Location")
+		resp.Body.Close()
+		if i := strings.LastIndex(loc, "/tag/"); i >= 0 {
+			return loc[i+len("/tag/"):], nil
+		}
+	}
+
+	api := &http.Client{Timeout: 15 * time.Second}
+	req, _ := http.NewRequest("GET", "https://api.github.com/repos/Nano112/gerrymander/releases/latest", nil)
+	if tok := os.Getenv("GITHUB_TOKEN"); tok != "" {
+		req.Header.Set("Authorization", "Bearer "+tok)
+	}
+	resp, err := api.Do(req)
 	if err != nil {
 		return "", err
 	}
