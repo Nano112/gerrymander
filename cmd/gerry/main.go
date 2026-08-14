@@ -109,8 +109,10 @@ func main() {
 		err = cmdTailnet(args)
 	case "update":
 		err = cmdUpdate(args)
-	case "version":
+	case "version", "-v", "--version", "-V":
 		fmt.Println("gerry", version)
+	case "help", "-h", "--help":
+		usage()
 	default:
 		usage()
 		os.Exit(2)
@@ -119,46 +121,6 @@ func main() {
 		fmt.Fprintln(os.Stderr, "gerry:", err)
 		os.Exit(1)
 	}
-}
-
-func usage() {
-	fmt.Fprint(os.Stderr, `gerrymander — hostname and port control plane
-
-usage: gerry <command> [flags]
-
-server:
-  bootstrap [--no-setup]       one-shot first run: service + DNS + trust
-  serve --config <file>        run API (+ proxy/DNS/observer per config)
-  ca-export --dir <dir>        print the local CA root certificate PEM
-  trust [--print]              install the daemon's CA into the system trust store
-  setup [--print]              fresh machine: DNS for dev zones + trust, reversibly
-  uninstall [--yes] [--purge]  full cleanse; removes ONLY gerry-marked files/certs
-                               (dry-run by default; can never break your DNS)
-
-client (env: GERRY_API, GERRY_API_KEY):
-  claim  --zone Z --label L [--owner O] [--kind tenant|platform] [--hold]
-  port   --owner O [--pool dev] [-q]
-  zone   add --name Z [--profile dev|prod]
-  run    --owner O [--pool dev] -- CMD [args…]
-         claims O's sticky port, then runs CMD with PORT set and any
-         literal {PORT} in the args replaced (e.g. vite --port {PORT})
-  dev    [service] [-f gerrymander.yaml]
-         set-and-forget for any runtime: applies the manifest, grants the
-         service's sticky port, and runs its manifest-declared dev: command
-  avail  --zone Z --label L
-  ls     [--zone Z] [--owner O]
-  release --id N
-  rename --id N --label NEW       atomic; keeps id/owner/routes/history
-  conflicts
-  init   [--name P] [--zone Z]  scaffold a gerrymander.yaml here
-  status                        doctor: daemon/DNS/proxy/trust checks + fixes
-  tailnet                       guided setup: dev hostnames on your tailscale
-                                (probes what works, walks through what doesn't)
-  service install|status|…      run the daemon as a launchd agent (host mode)
-  up     [-f gerrymander.yaml]  apply a project manifest
-  down   [-f gerrymander.yaml]  release a project manifest
-  mcp                           serve MCP over stdio
-`)
 }
 
 func apiClient() *client.Client {

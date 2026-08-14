@@ -29,7 +29,7 @@ func cmdUpdate(args []string) error {
 		return fmt.Errorf("could not determine the latest release: %w", err)
 	}
 	latestV := strings.TrimPrefix(latest, "v")
-	if latestV == version {
+	if !semverNewer(latestV, version) {
 		fmt.Printf("gerry %s is current\n", version)
 		return nil
 	}
@@ -182,4 +182,23 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	return os.WriteFile(dst, in, 0o755)
+}
+
+// semverNewer reports a > b for x.y.z strings; a dev build ("dev") always
+// counts as older, and a briefly stale release pointer can never suggest a
+// downgrade.
+func semverNewer(a, b string) bool {
+	if b == "dev" {
+		return true
+	}
+	pa, pb := strings.Split(a, "."), strings.Split(b, ".")
+	for i := 0; i < 3 && i < len(pa) && i < len(pb); i++ {
+		var na, nb int
+		fmt.Sscanf(pa[i], "%d", &na)
+		fmt.Sscanf(pb[i], "%d", &nb)
+		if na != nb {
+			return na > nb
+		}
+	}
+	return false
 }

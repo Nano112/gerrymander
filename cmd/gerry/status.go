@@ -35,8 +35,10 @@ func isTTY(f *os.File) bool {
 
 type statusReport struct{ failures int }
 
-func (s *statusReport) ok(f string, a ...any)   { fmt.Printf("  %s %s\n", okMark, fmt.Sprintf(f, a...)) }
-func (s *statusReport) warn(f string, a ...any) { fmt.Printf("  %s %s\n", warnMark, fmt.Sprintf(f, a...)) }
+func (s *statusReport) ok(f string, a ...any) { fmt.Printf("  %s %s\n", okMark, fmt.Sprintf(f, a...)) }
+func (s *statusReport) warn(f string, a ...any) {
+	fmt.Printf("  %s %s\n", warnMark, fmt.Sprintf(f, a...))
+}
 func (s *statusReport) bad(f string, a ...any) {
 	s.failures++
 	fmt.Printf("  %s %s\n", badMark, fmt.Sprintf(f, a...))

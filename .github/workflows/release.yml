@@ -38,7 +38,8 @@ jobs:
           if [ "${{ matrix.goos }}" = "windows" ]; then
             zip gerry_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}.zip $BIN
           else
-            tar czf gerry_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz $BIN
+            cp docs/man/gerry.1 .
+            tar czf gerry_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz $BIN gerry.1
           fi
       - name: attach to release
         env:
