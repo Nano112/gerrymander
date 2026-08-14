@@ -235,11 +235,25 @@ func cmdServe(args []string) error {
 		if err != nil {
 			return fmt.Errorf("actuator client: %w", err)
 		}
-		act := &actuate.Actuator{
-			Store: st, Client: kc, Zones: cfg.Actuator.Zones,
-			EntryPoints: cfg.Actuator.EntryPoints, Interval: cfg.Actuator.Interval, Log: log,
+		switch cfg.Actuator.Provider {
+		case "", "traefik-crd":
+			act := &actuate.Actuator{
+				Store: st, Client: kc, Zones: cfg.Actuator.Zones,
+				EntryPoints: cfg.Actuator.EntryPoints, Interval: cfg.Actuator.Interval, Log: log,
+			}
+			go act.Run(ctx)
+		case "gateway-api":
+			if cfg.Actuator.Gateway.Name == "" {
+				return fmt.Errorf("actuator.provider gateway-api needs actuator.gateway.name (the Gateway routes attach to)")
+			}
+			act := &actuate.GatewayActuator{
+				Store: st, Client: kc, Zones: cfg.Actuator.Zones, Interval: cfg.Actuator.Interval,
+				GatewayName: cfg.Actuator.Gateway.Name, GatewayNamespace: cfg.Actuator.Gateway.Namespace, Log: log,
+			}
+			go act.Run(ctx)
+		default:
+			return fmt.Errorf("unknown actuator.provider %q (traefik-crd | gateway-api)", cfg.Actuator.Provider)
 		}
-		go act.Run(ctx)
 	}
 
 	apiKey := os.Getenv(cfg.API.KeyEnv)

@@ -60,10 +60,17 @@ type Config struct {
 	// service backends. Off by default; it shares the observer's cluster
 	// credentials.
 	Actuator struct {
-		Enabled     bool          `yaml:"enabled"`
+		Enabled bool `yaml:"enabled"`
+		// Provider: "traefik-crd" (default) writes Traefik IngressRoutes;
+		// "gateway-api" writes Gateway API HTTPRoutes attached to Gateway.
+		Provider    string        `yaml:"provider"`
 		Zones       []string      `yaml:"zones"`
-		EntryPoints []string      `yaml:"entry_points"`
+		EntryPoints []string      `yaml:"entry_points"` // traefik-crd only
 		Interval    time.Duration `yaml:"interval"`
+		Gateway     struct {      // gateway-api only
+			Name      string `yaml:"name"`
+			Namespace string `yaml:"namespace"`
+		} `yaml:"gateway"`
 	} `yaml:"actuator"`
 	Ports struct {
 		EnsureDefaultPool bool `yaml:"ensure_default_pool"`
