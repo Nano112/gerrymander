@@ -1,0 +1,22 @@
+{
+    "name": "gerrymander/laravel",
+    "description": "Laravel client for gerrymander — hostname availability checks, holds, and sticky ports for multi-tenant apps",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.2",
+        "laravel/framework": "^10.0|^11.0|^12.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Gerrymander\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Gerrymander\\GerrymanderServiceProvider"
+            ]
+        }
+    }
+}
