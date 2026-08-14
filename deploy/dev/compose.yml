@@ -1,0 +1,23 @@
+services:
+  gerry:
+    image: gerrymander:dev
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:80:80'
+      - '127.0.0.1:443:443'
+      - '127.0.0.1:5173:5173'
+      - '127.0.0.1:5174:5174'
+      - '127.0.0.1:5175:5175'
+      - '127.0.0.1:5176:5176'
+      - '127.0.0.1:4780:4780'
+    volumes:
+      - './gerry.yaml:/etc/gerry.yaml:ro'
+      - './data:/data'
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    networks:
+      - dev-proxy
+
+networks:
+  dev-proxy:
+    external: true

@@ -1,0 +1,6 @@
+/gerry
+/dist/
+deploy/dev/data/
+*.db
+*.db-wal
+*.db-shm

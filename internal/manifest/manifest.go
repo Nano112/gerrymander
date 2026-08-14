@@ -19,19 +19,30 @@ type Manifest struct {
 	Services map[string]Service `yaml:"services"`
 }
 
-// Service declares hostnames plus a backend.
+// Service declares hostnames plus one or more routes.
 type Service struct {
 	// Hostnames within the zone. "olsyn.test" = apex, "*.olsyn.test" =
 	// wildcard, "vite.olsyn.test" = a label. Multiple entries collapse
 	// into apex+wildcard on the same allocation when possible.
 	Hostnames []string `yaml:"hostnames"`
-	// Listen restricts routes to specific proxy ports (default 443/80).
+	// Listen restricts the shorthand backend to specific proxy ports
+	// (default 443/80).
 	Listen []int `yaml:"listen,omitempty"`
-	// Address backend: "host:port".
-	Address string `yaml:"address,omitempty"`
-	// PortPool routes to 127.0.0.1:<sticky port for this service>.
-	PortPool string `yaml:"port_pool,omitempty"`
-	// Supervised backend.
+	// Shorthand single backend: exactly one of these — or use Routes.
+	Address    string          `yaml:"address,omitempty"`
+	PortPool   string          `yaml:"port_pool,omitempty"`
+	Supervised *SupervisedSpec `yaml:"supervised,omitempty"`
+	// Routes declares per-listener backends when one hostname serves
+	// different upstreams on different ports (e.g. app on 443, Vite HMR
+	// on :5175).
+	Routes []RouteSpec `yaml:"routes,omitempty"`
+}
+
+// RouteSpec is one listener→backend binding inside a service.
+type RouteSpec struct {
+	Listen     int             `yaml:"listen,omitempty"` // 0 = default 443/80
+	Address    string          `yaml:"address,omitempty"`
+	PortPool   string          `yaml:"port_pool,omitempty"`
 	Supervised *SupervisedSpec `yaml:"supervised,omitempty"`
 }
 
@@ -81,8 +92,27 @@ func Load(path string) (*Manifest, error) {
 		if svc.PortPool != "" && svc.Address == "" && svc.Supervised == nil {
 			n++
 		}
-		if n != 1 {
-			return nil, fmt.Errorf("%s: service %q needs exactly one backend (address | supervised | port_pool)", path, name)
+		if len(svc.Routes) > 0 {
+			if n != 0 {
+				return nil, fmt.Errorf("%s: service %q mixes routes with a shorthand backend", path, name)
+			}
+			for i, r := range svc.Routes {
+				rn := 0
+				if r.Address != "" {
+					rn++
+				}
+				if r.Supervised != nil {
+					rn++
+				}
+				if r.PortPool != "" && r.Address == "" && r.Supervised == nil {
+					rn++
+				}
+				if rn != 1 {
+					return nil, fmt.Errorf("%s: service %q route %d needs exactly one backend", path, name, i)
+				}
+			}
+		} else if n != 1 {
+			return nil, fmt.Errorf("%s: service %q needs exactly one backend (address | supervised | port_pool | routes)", path, name)
 		}
 	}
 	return &m, nil
@@ -104,19 +134,30 @@ type Claim struct {
 // caller supplies it so claims stay pure.
 func (m *Manifest) Claims(resolvePort func(pool, ownerRef string) (int, error)) ([]Claim, error) {
 	var out []Claim
+	claimedLabels := map[string]string{} // label → service, cross-service collision check
 	for name, svc := range m.Services {
 		ownerRef := m.Project + "/" + name
-		backend, err := m.backendFor(name, svc, ownerRef, resolvePort)
-		if err != nil {
-			return nil, err
-		}
-		listens := svc.Listen
-		if len(listens) == 0 {
-			listens = []int{0}
-		}
 		var routes []core.Route
-		for _, l := range listens {
-			routes = append(routes, core.Route{Listen: l, Backend: backend})
+		if len(svc.Routes) > 0 {
+			for i, rs := range svc.Routes {
+				backend, err := backendFrom(fmt.Sprintf("%s route %d", name, i), rs.Address, rs.PortPool, rs.Supervised, ownerRef, resolvePort)
+				if err != nil {
+					return nil, err
+				}
+				routes = append(routes, core.Route{Listen: rs.Listen, Backend: backend})
+			}
+		} else {
+			backend, err := backendFrom(name, svc.Address, svc.PortPool, svc.Supervised, ownerRef, resolvePort)
+			if err != nil {
+				return nil, err
+			}
+			listens := svc.Listen
+			if len(listens) == 0 {
+				listens = []int{0}
+			}
+			for _, l := range listens {
+				routes = append(routes, core.Route{Listen: l, Backend: backend})
+			}
 		}
 
 		// Group hostnames into per-label claims; "x" and "*.x" merge into
@@ -145,6 +186,10 @@ func (m *Manifest) Claims(resolvePort func(pool, ownerRef string) (int, error)) 
 			}
 		}
 		for _, label := range order {
+			if prev, dup := claimedLabels[label]; dup {
+				return nil, fmt.Errorf("services %q and %q both claim label %q — merge them into one service with routes", prev, name, label)
+			}
+			claimedLabels[label] = name
 			s := labels[label]
 			out = append(out, Claim{
 				Zone: m.Zone, Label: label, Wildcard: s.wildcard,
@@ -156,25 +201,25 @@ func (m *Manifest) Claims(resolvePort func(pool, ownerRef string) (int, error)) 
 	return out, nil
 }
 
-func (m *Manifest) backendFor(name string, svc Service, ownerRef string, resolvePort func(pool, ownerRef string) (int, error)) (core.Backend, error) {
+func backendFrom(name, address, portPool string, sup *SupervisedSpec, ownerRef string, resolvePort func(pool, ownerRef string) (int, error)) (core.Backend, error) {
 	switch {
-	case svc.Address != "":
-		host, port, err := splitAddr(svc.Address)
+	case address != "":
+		host, port, err := splitAddr(address)
 		if err != nil {
 			return core.Backend{}, fmt.Errorf("service %q: %w", name, err)
 		}
 		return core.Backend{Kind: "address", Address: &core.AddressBackend{Host: host, Port: port}}, nil
-	case svc.Supervised != nil:
-		sup := &core.SupervisedBackend{
-			Cmd: svc.Supervised.Cmd, Dir: svc.Supervised.Dir, Env: svc.Supervised.Env,
-			PortPool: svc.Supervised.PortPool, IdleTimeout: svc.Supervised.IdleTimeout,
+	case sup != nil:
+		s := &core.SupervisedBackend{
+			Cmd: sup.Cmd, Dir: sup.Dir, Env: sup.Env,
+			PortPool: sup.PortPool, IdleTimeout: sup.IdleTimeout,
 		}
-		if svc.Supervised.Health != nil {
-			sup.Health = &core.HealthCheck{Path: svc.Supervised.Health.Path, Timeout: svc.Supervised.Health.Timeout}
+		if sup.Health != nil {
+			s.Health = &core.HealthCheck{Path: sup.Health.Path, Timeout: sup.Health.Timeout}
 		}
-		return core.Backend{Kind: "supervised", Supervised: sup}, nil
-	case svc.PortPool != "":
-		port, err := resolvePort(svc.PortPool, ownerRef)
+		return core.Backend{Kind: "supervised", Supervised: s}, nil
+	case portPool != "":
+		port, err := resolvePort(portPool, ownerRef)
 		if err != nil {
 			return core.Backend{}, fmt.Errorf("service %q port: %w", name, err)
 		}
