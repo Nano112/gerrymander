@@ -3,6 +3,15 @@
 All notable changes to gerrymander. Versions follow [semver](https://semver.org);
 until 1.0, minor bumps may include breaking changes (called out explicitly).
 
+## v0.8.0 — 2026-08-15
+
+- `gerry -v/--version/-h/--help` work; the help screen is styled
+  (lipgloss, NO_COLOR-safe) and organized into server / projects /
+  registry / environment.
+- man page (`man gerry`), shipped in tarballs and installed by brew.
+- `gerry update` compares semver, never suggesting a downgrade from a
+  briefly stale release pointer.
+
 ## v0.7.5 — 2026-08-15
 
 - `gerry update` discovers releases via the redirect on
