@@ -1,0 +1,99 @@
+.TH GERRY 1 "August 2026" "gerrymander" "User Commands"
+.SH NAME
+gerry \- hostname and port control plane
+.SH SYNOPSIS
+.B gerry
+.I command
+.RI [ flags ]
+.SH DESCRIPTION
+.B gerry
+is one authority for who owns which hostname in a wildcard zone, and which
+process owns which port on a dev machine. The same binary, model, and CLI
+run on a laptop (TLS proxy, embedded DNS, process supervision) and in
+production (registry, Kubernetes observer and route actuator).
+.SH FIRST RUN
+.TP
+.B gerry bootstrap [\-\-no\-setup]
+The whole first run as one idempotent command: daemon on login, DNS for
+dev zones, TLS trust. Skips the service when a daemon already serves the
+API.
+.TP
+.B gerry init [\-\-name P] [\-\-zone Z] [\-\-yes]
+Scaffold gerrymander.yaml in the current project. Detects the dev command
+from package.json and the lockfile; for vite projects, offers to install
+gerrymander\-vite and wire vite.config itself.
+.SH DAILY COMMANDS
+.TP
+.B gerry dev [service] [\-f file]
+Apply the manifest, grant sticky ports, and run the declared dev:
+commands, prefixed, with group shutdown.
+.TP
+.B gerry run \-\-owner O \-\- CMD [args...]
+Claim O's sticky port, then exec CMD with PORT exported and any literal
+{PORT} in the arguments replaced.
+.TP
+.B gerry status
+The doctor: daemon, DNS, proxy, trust, tailnet checks, each failure with
+its exact fix.
+.TP
+.B gerry tailnet
+Guided setup for dev hostnames across a tailscale network: probes
+machine\-subdomain resolution, split DNS and machine\-name ports, and
+walks through whatever is missing. Re\-running verifies each change.
+.SH REGISTRY
+.TP
+.B gerry claim \-\-zone Z \-\-label L [\-\-owner O] [\-\-kind tenant|platform] [\-\-hold]
+Claim a hostname. Conflicts return the reason and suggestions.
+.TP
+.B gerry avail \-\-zone Z \-\-label L
+Availability check with why\-not and suggestions.
+.TP
+.B gerry ls [\-\-zone Z] [\-\-owner O]
+List allocations.
+.TP
+.B gerry rename <fqdn> <label>
+Atomic rename; id, owner, routes and history survive.
+.TP
+.B gerry release \-\-id N
+Release an allocation.
+.TP
+.B gerry port \-\-owner O [\-\-pool dev]
+Sticky port: the same owner always receives the same port.
+.TP
+.B gerry zone add|rm, gerry token create|ls|revoke, gerry conflicts
+Zones, scoped API credentials, and observer findings.
+.SH MACHINE LIFECYCLE
+.TP
+.B gerry service install|status|restart|uninstall
+Run the daemon on login (launchd on macOS, systemd \-\-user on Linux).
+.TP
+.B gerry trust [\-\-print]
+Install the daemon's CA into the system trust store. Phones fetch
+/v1/ca.crt from the daemon instead.
+.TP
+.B gerry setup [\-\-print] / gerry uninstall [\-\-yes] [\-\-purge]
+Wire (and fully unwire) DNS and trust. Everything written is
+marker\-tagged; uninstall removes only gerry's own marks and can never
+break DNS it did not create.
+.TP
+.B gerry update [\-\-check]
+Self\-update from the latest release. Homebrew installs defer to brew.
+.SH ENVIRONMENT
+.TP
+.B GERRY_API
+Daemon address (default http://127.0.0.1:4780).
+.TP
+.B GERRY_API_KEY
+Bearer credential; scoped tokens from `gerry token` work here too.
+.TP
+.B GERRY_TLD
+Default TLD for `gerry init` scaffolds (default: test).
+.SH FILES
+.TP
+.I ~/.gerrymander/
+Database, CA material, config, and logs (host mode).
+.TP
+.I gerrymander.yaml
+Per\-project manifest: zone, services, hostnames, dev commands.
+.SH SEE ALSO
+Full documentation: https://nano112.github.io/gerrymander
