@@ -1,11 +1,11 @@
 // Gerrymander desktop frontend. Talks to the Go backend via Wails bindings.
 import {
-  GetStatus, GetTree, GetPorts, GetProcesses, GetSettings, SaveSettings,
-  Claim, Release, Rename, Availability, KillPort, StartProcess, StopProcess,
+  GetStatus, GetTree, GetPorts, GetProcesses, GetProjects, GetSettings, SaveSettings,
+  Claim, CreateZone, Release, Rename, Availability, KillPort, StartProcess, StopProcess,
   ProcessLogs, OpenURL, DaemonUp, DaemonDown,
 } from "../wailsjs/go/main/App";
 
-type View = "districts" | "ports" | "processes";
+type View = "districts" | "projects" | "ports" | "processes";
 
 interface TreeNode {
   id?: number;
@@ -145,8 +145,22 @@ async function renderDistricts() {
     return;
   }
   view.replaceChildren();
+  const toolbar = el("div", "toolbar");
+  const addZone = el("button", "btn btn-quiet", "+ New zone") as HTMLButtonElement;
+  addZone.onclick = async () => {
+    const name = await ask({
+      title: "New zone",
+      body: "A zone is a namespace of hostnames, usually a .test domain. Projects can also create zones implicitly via gerry up.",
+      input: { placeholder: "myproject.test" },
+      okLabel: "Create zone",
+    });
+    if (!name) return;
+    try { await CreateZone(name, "dev"); render(); } catch (e) { await notify("Zone creation failed", String(e)); }
+  };
+  toolbar.append(addZone);
+  view.append(toolbar);
   if (tree.length === 0) {
-    renderEmpty("No zones yet", "The daemon has no zones configured. Add zones in its gerry.yaml and restart it.");
+    renderEmpty("No zones yet", "Create one above, or run gerry up in a project — manifests create their zone automatically.");
     return;
   }
   for (const zone of tree) {
@@ -290,6 +304,59 @@ claimForm.addEventListener("submit", async (ev) => {
     $("#claim-error").textContent = String(e);
   }
 });
+
+/* ---------- projects ---------- */
+
+async function renderProjects() {
+  if (!apiUp) {
+    renderEmpty("The registry is offline", "Start the local daemon to see your projects.");
+    return;
+  }
+  let projects: any[];
+  try {
+    projects = (await GetProjects()) ?? [];
+  } catch (e) {
+    renderEmpty("Could not load projects", String(e));
+    return;
+  }
+  view.replaceChildren();
+  if (!projects.length) {
+    renderEmpty(
+      "No projects yet",
+      "A project appears here when a gerrymander.yaml is applied — by `gerry up`, or automatically when a dev server using @gerrymander/vite starts.",
+    );
+    return;
+  }
+  for (const p of projects) {
+    const box = el("div", "zone");
+    const head = el("div", "zone-head");
+    head.append(el("span", "zone-name", p.name), el("span", "zone-profile", p.zone));
+    box.append(head);
+    for (const s of p.services ?? []) {
+      const row = el("div", "node-row");
+      row.append(el("span", `blob blob-${s.state ?? "active"}`));
+      row.append(el("span", "cmd", s.name));
+      const hosts = el("span", "fqdn");
+      hosts.textContent = (s.hostnames ?? []).join("  ·  ");
+      row.append(hosts);
+      if (s.routes?.length) row.append(el("span", "routes", s.routes.join("  ·  ")));
+      if (s.port) {
+        const port = el("span", "tag-gerry", `port ${s.port}`);
+        row.append(port);
+      }
+      const actions = el("span", "node-actions");
+      const primary = (s.hostnames ?? [])[0];
+      if (primary) {
+        const open = el("button", "btn btn-quiet", "Open") as HTMLButtonElement;
+        open.onclick = () => OpenURL(`https://${primary.replace(/^\*\./, "")}`);
+        actions.append(open);
+      }
+      row.append(actions);
+      box.append(row);
+    }
+    view.append(box);
+  }
+}
 
 /* ---------- ports ---------- */
 
@@ -475,6 +542,7 @@ function renderEmpty(title: string, body: string) {
 function render() {
   switch (currentView) {
     case "districts": renderDistricts(); break;
+    case "projects": renderProjects(); break;
     case "ports": renderPorts(); break;
     case "processes": renderProcesses(); break;
   }

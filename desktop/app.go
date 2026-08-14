@@ -284,6 +284,89 @@ func (a *App) Availability(zone, label string) (map[string]any, error) {
 	return out, err
 }
 
+// ProjectService is one service inside a project card.
+type ProjectService struct {
+	Name      string   `json:"name"`
+	Hostnames []string `json:"hostnames"`
+	Routes    []string `json:"routes,omitempty"`
+	Port      int      `json:"port,omitempty"`
+	State     string   `json:"state"`
+}
+
+// ProjectView groups a manifest-managed project's claims + ports.
+type ProjectView struct {
+	Name     string           `json:"name"`
+	Zone     string           `json:"zone"`
+	Services []ProjectService `json:"services"`
+}
+
+// GetProjects derives project cards from allocations (project field set by
+// gerry up / the vite plugin) and sticky port grants.
+func (a *App) GetProjects() ([]ProjectView, error) {
+	var allocs struct {
+		Allocations []core.Allocation `json:"allocations"`
+	}
+	if err := a.api().Do(a.ctx, "GET", "/v1/allocations", nil, &allocs); err != nil {
+		return nil, err
+	}
+	var ports struct {
+		Ports []core.PortAllocation `json:"ports"`
+	}
+	a.api().Do(a.ctx, "GET", "/v1/ports", nil, &ports)
+	portByOwner := map[string]int{}
+	for _, p := range ports.Ports {
+		portByOwner[p.OwnerRef] = p.Value
+	}
+
+	type key struct{ project, zone string }
+	grouped := map[key]map[string]*ProjectService{}
+	order := []key{}
+	for _, al := range allocs.Allocations {
+		if al.Project == "" {
+			continue
+		}
+		k := key{al.Project, al.ZoneName}
+		if grouped[k] == nil {
+			grouped[k] = map[string]*ProjectService{}
+			order = append(order, k)
+		}
+		svcName := al.OwnerRef
+		if cut := strings.TrimPrefix(svcName, al.Project+"/"); cut != svcName {
+			svcName = cut
+		}
+		svc := grouped[k][svcName]
+		if svc == nil {
+			svc = &ProjectService{Name: svcName, State: string(al.State), Port: portByOwner[al.OwnerRef]}
+			grouped[k][svcName] = svc
+		}
+		svc.Hostnames = append(svc.Hostnames, al.FQDN)
+		svc.Routes = append(svc.Routes, allocNode(al).Routes...)
+		if string(al.State) != "active" {
+			svc.State = string(al.State) // surface any non-active state
+		}
+	}
+	var out []ProjectView
+	for _, k := range order {
+		pv := ProjectView{Name: k.project, Zone: k.zone}
+		names := make([]string, 0, len(grouped[k]))
+		for n := range grouped[k] {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		for _, n := range names {
+			pv.Services = append(pv.Services, *grouped[k][n])
+		}
+		out = append(out, pv)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
+}
+
+// CreateZone adds a zone to the registry.
+func (a *App) CreateZone(name, profile string) error {
+	return a.api().Do(a.ctx, "POST", "/v1/zones", map[string]any{"name": name, "profile": profile}, nil)
+}
+
 // PortsView combines registry grants with live listeners.
 type PortsView struct {
 	Grants    []core.PortAllocation `json:"grants"`

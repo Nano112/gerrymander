@@ -29,6 +29,15 @@ type entry struct {
 type Table struct {
 	mu      sync.RWMutex
 	entries []entry
+	zones   []string
+}
+
+// Zones returns the zone names known at the last rebuild (for error-page
+// hints).
+func (t *Table) Zones() []string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return append([]string{}, t.zones...)
 }
 
 // Rebuild loads active allocations. Pending/holds do not route.
@@ -36,6 +45,12 @@ func (t *Table) Rebuild(ctx context.Context, st *store.Store) error {
 	allocs, err := st.ListAllocations(ctx, store.AllocFilter{State: string(core.StateActive)})
 	if err != nil {
 		return err
+	}
+	var zoneNames []string
+	if zs, err := st.ListZones(ctx); err == nil {
+		for _, z := range zs {
+			zoneNames = append(zoneNames, z.Name)
+		}
 	}
 	var entries []entry
 	for _, a := range allocs {
@@ -68,6 +83,7 @@ func (t *Table) Rebuild(ctx context.Context, st *store.Store) error {
 	})
 	t.mu.Lock()
 	t.entries = entries
+	t.zones = zoneNames
 	t.mu.Unlock()
 	return nil
 }

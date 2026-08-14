@@ -189,13 +189,107 @@ func TestProxyEndToEnd(t *testing.T) {
 	if !strings.Contains(got, "proto=https") {
 		t.Errorf("X-Forwarded-Proto missing: %q", got)
 	}
-	// Unknown host → 404 from gerry, not a proxy attempt.
+	// Unknown host → 404 from gerry, not a proxy attempt. Non-browser
+	// clients keep the plain-text contract.
 	resp2, err := client.Get(fmt.Sprintf("https://unknown.example:%d/", tlsPort))
 	if err != nil {
 		t.Fatal(err)
 	}
+	b2, _ := io.ReadAll(resp2.Body)
 	resp2.Body.Close()
 	if resp2.StatusCode != 404 {
 		t.Errorf("unknown host: want 404, got %d", resp2.StatusCode)
+	}
+	if resp2.Header.Get("X-Gerry-Error") == "" {
+		t.Error("error responses must carry X-Gerry-Error")
+	}
+	if strings.Contains(string(b2), "<html") {
+		t.Errorf("non-browser client got HTML: %.80s", b2)
+	}
+
+	// Browser (Accept: text/html) gets the diagnostic page with hints.
+	req3, _ := http.NewRequest("GET", fmt.Sprintf("https://unknown.e2e.test:%d/", tlsPort), nil)
+	req3.Header.Set("Accept", "text/html,application/xhtml+xml")
+	req3.Host = "unknown.e2e.test"
+	// direct exact-host miss requires a host outside the wildcard
+	req3.URL.Host = fmt.Sprintf("nope.other:%d", tlsPort)
+	req3.Host = "nope.other"
+	resp3, err := client.Do(req3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b3, _ := io.ReadAll(resp3.Body)
+	resp3.Body.Close()
+	if resp3.StatusCode != 404 || !strings.Contains(string(b3), "unclaimed district") || !strings.Contains(string(b3), "gerry ls") {
+		t.Errorf("browser 404 page wrong: %d %.120s", resp3.StatusCode, b3)
+	}
+}
+
+// A routed host whose backend is down: browsers get the auto-recover page,
+// HEAD probes see X-Gerry-Error, CLIs get text.
+func TestUpstreamDownPage(t *testing.T) {
+	st, err := store.Open("sqlite:" + filepath.Join(t.TempDir(), "down.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx := context.Background()
+	z, _ := st.EnsureZone(ctx, core.Zone{Name: "down.test", Profile: "dev"})
+	// Point at a port that is certainly closed.
+	closed, _ := net.Listen("tcp", "127.0.0.1:0")
+	deadPort := closed.Addr().(*net.TCPAddr).Port
+	closed.Close()
+	st.CreateAllocation(ctx, core.Allocation{
+		ZoneID: z.ID, Label: "app", FQDN: "app.down.test", Kind: core.KindPlatform,
+		Source: core.SourceManifest, State: core.StateActive, OwnerRef: "proj/app",
+		Spec: core.Spec{Routes: []core.Route{{Backend: addrBackend("127.0.0.1", deadPort)}}},
+	})
+
+	ca, _ := EnsureCA(t.TempDir())
+	l, _ := net.Listen("tcp", "127.0.0.1:0")
+	tlsPort := l.Addr().(*net.TCPAddr).Port
+	l.Close()
+	cctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	p := New(st, ca, nil, Options{TLSAddr: fmt.Sprintf("127.0.0.1:%d", tlsPort)})
+	go p.Run(cctx)
+	time.Sleep(300 * time.Millisecond)
+
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(ca.RootPEM())
+	client := &http.Client{Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{RootCAs: pool, ServerName: "app.down.test"},
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", tlsPort))
+		},
+	}}
+
+	req, _ := http.NewRequest("GET", fmt.Sprintf("https://app.down.test:%d/", tlsPort), nil)
+	req.Header.Set("Accept", "text/html")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 502 {
+		t.Fatalf("want 502, got %d", resp.StatusCode)
+	}
+	s := string(body)
+	for _, want := range []string{"backend unreachable", "proj/app", "watching for the backend"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("502 page missing %q", want)
+		}
+	}
+	// HEAD (the recovery probe) sees the error marker with an empty body.
+	reqH, _ := http.NewRequest("HEAD", fmt.Sprintf("https://app.down.test:%d/", tlsPort), nil)
+	reqH.Header.Set("Accept", "text/html")
+	respH, err := client.Do(reqH)
+	if err != nil {
+		t.Fatal(err)
+	}
+	respH.Body.Close()
+	if respH.Header.Get("X-Gerry-Error") != "upstream" {
+		t.Errorf("HEAD marker: %q", respH.Header.Get("X-Gerry-Error"))
 	}
 }

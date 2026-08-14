@@ -6,6 +6,8 @@ export function Availability(arg1:string,arg2:string):Promise<Record<string, any
 
 export function Claim(arg1:main.ClaimInput):Promise<void>;
 
+export function CreateZone(arg1:string,arg2:string):Promise<void>;
+
 export function DaemonDown():Promise<string>;
 
 export function DaemonUp():Promise<string>;
@@ -13,6 +15,8 @@ export function DaemonUp():Promise<string>;
 export function GetPorts():Promise<main.PortsView>;
 
 export function GetProcesses():Promise<Array<Record<string, any>>>;
+
+export function GetProjects():Promise<Array<main.ProjectView>>;
 
 export function GetSettings():Promise<main.Settings>;
 

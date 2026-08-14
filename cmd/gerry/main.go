@@ -62,6 +62,8 @@ func main() {
 		err = cmdRun(args)
 	case "init":
 		err = cmdInit(args)
+	case "status", "doctor":
+		err = cmdStatus(args)
 	case "conflicts":
 		err = cmdConflicts(args)
 	case "up":
@@ -106,6 +108,7 @@ client (env: GERRY_API, GERRY_API_KEY):
   rename --id N --label NEW       atomic; keeps id/owner/routes/history
   conflicts
   init   [--name P] [--zone Z]  scaffold a gerrymander.yaml here
+  status                        doctor: daemon/DNS/proxy/trust checks + fixes
   up     [-f gerrymander.yaml]  apply a project manifest
   down   [-f gerrymander.yaml]  release a project manifest
   mcp                           serve MCP over stdio

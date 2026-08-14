@@ -118,6 +118,8 @@ main { flex: 1; overflow-y: auto; padding: 16px; }
 .btn-danger:hover { border-color: var(--vermilion); }
 .btn[disabled] { opacity: 0.45; cursor: default; }
 
+.toolbar { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+
 /* ---- districts tree ---- */
 .zone {
   margin-bottom: 22px;

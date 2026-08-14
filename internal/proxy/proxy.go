@@ -118,15 +118,19 @@ func (p *Proxy) redirectHTTPS(w http.ResponseWriter, r *http.Request) {
 
 func (p *Proxy) handler(listenPort int) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host := r.Host
+		if i := strings.LastIndex(host, ":"); i > -1 && !strings.Contains(host[i:], "]") {
+			host = host[:i]
+		}
 		target, ok := p.table.Resolve(r.Host, listenPort)
 		if !ok {
-			http.Error(w, fmt.Sprintf("gerrymander: no allocation routes %q on port %d\n", r.Host, listenPort), http.StatusNotFound)
+			writeUnknownHost(w, r, host, listenPort, p.table.Zones())
 			return
 		}
 		upstream, err := p.upstreamFor(r.Context(), target)
 		if err != nil {
 			p.opts.Log.Error("upstream", "host", r.Host, "alloc", target.Alloc.FQDN, "err", err)
-			http.Error(w, fmt.Sprintf("gerrymander: allocation %q backend unavailable: %v\n", target.Alloc.FQDN, err), http.StatusBadGateway)
+			writeUpstreamDown(w, r, target, describeBackend(target), err)
 			return
 		}
 		rp := &httputil.ReverseProxy{
@@ -138,12 +142,26 @@ func (p *Proxy) handler(listenPort int) http.Handler {
 				pr.Out.Header.Set("X-Forwarded-Proto", "https")
 			},
 			ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-				http.Error(w, fmt.Sprintf("gerrymander: %q upstream %s failed: %v\n", target.Alloc.FQDN, upstream, err), http.StatusBadGateway)
+				writeUpstreamDown(w, r, target, upstream.String(), err)
 			},
 			FlushInterval: 100 * time.Millisecond,
 		}
 		rp.ServeHTTP(w, r)
 	})
+}
+
+// describeBackend renders a backend target for error pages when no URL was
+// resolved (e.g. supervision failed before an address existed).
+func describeBackend(t Target) string {
+	b := t.Backend
+	switch {
+	case b.Kind == "address" && b.Address != nil:
+		return fmt.Sprintf("http://%s:%d", b.Address.Host, b.Address.Port)
+	case b.Kind == "supervised" && b.Supervised != nil:
+		return "supervised: " + b.Supervised.Cmd
+	default:
+		return b.Kind
+	}
 }
 
 func (p *Proxy) upstreamFor(ctx context.Context, t Target) (*url.URL, error) {

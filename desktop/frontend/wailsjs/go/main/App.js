@@ -10,6 +10,10 @@ export function Claim(arg1) {
   return window['go']['main']['App']['Claim'](arg1);
 }
 
+export function CreateZone(arg1, arg2) {
+  return window['go']['main']['App']['CreateZone'](arg1, arg2);
+}
+
 export function DaemonDown() {
   return window['go']['main']['App']['DaemonDown']();
 }
@@ -24,6 +28,10 @@ export function GetPorts() {
 
 export function GetProcesses() {
   return window['go']['main']['App']['GetProcesses']();
+}
+
+export function GetProjects() {
+  return window['go']['main']['App']['GetProjects']();
 }
 
 export function GetSettings() {
