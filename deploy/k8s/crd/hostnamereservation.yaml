@@ -1,0 +1,61 @@
+# HostnameReservation: declare registry entries in Git and let the cluster
+# feed them to gerry. The CR is INPUT — gerry's database stays the source of
+# truth (conflicts are won by whoever claimed first, exactly as via the API).
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: hostnamereservations.gerrymander.dev
+spec:
+  group: gerrymander.dev
+  names:
+    kind: HostnameReservation
+    listKind: HostnameReservationList
+    plural: hostnamereservations
+    singular: hostnamereservation
+    shortNames: [hnr]
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - name: Zone
+          type: string
+          jsonPath: .spec.zone
+        - name: Label
+          type: string
+          jsonPath: .spec.label
+        - name: Kind
+          type: string
+          jsonPath: .spec.kind
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            spec:
+              type: object
+              required: [zone, label]
+              properties:
+                zone:
+                  type: string
+                  description: Registry zone the hostname lives in.
+                label:
+                  type: string
+                  description: Leftmost label ("@" for the zone apex).
+                kind:
+                  type: string
+                  enum: [platform, tenant]
+                  default: platform
+                ownerRef:
+                  type: string
+                  description: Owner recorded on the allocation (default ns/name of this CR).
+                routes:
+                  type: array
+                  description: Optional route spec, same shape as the API's spec.routes.
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                wildcard:
+                  type: boolean
+                  default: false

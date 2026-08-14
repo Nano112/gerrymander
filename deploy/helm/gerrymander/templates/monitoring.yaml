@@ -1,0 +1,48 @@
+{{- if .Values.monitoring.serviceMonitor }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 60s
+{{- end }}
+{{- if .Values.monitoring.prometheusRule }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  groups:
+    - name: gerrymander
+      rules:
+        - alert: GerrymanderHostnameConflict
+          expr: max by (zone) (gerry_conflicts) > 0
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "hostname conflicts in zone {{ `{{ $labels.zone }}` }}"
+            description: "The registry observed routes that clash with allocations. See /v1/conflicts."
+        - alert: GerrymanderUnregisteredHosts
+          expr: max by (zone) (gerry_unregistered_observed_hosts) > 0
+          for: 30m
+          labels: { severity: warning }
+          annotations:
+            summary: "unregistered hosts served in zone {{ `{{ $labels.zone }}` }}"
+            description: "Cluster routes serve hostnames with no allocation. Register or remove them."
+        - alert: GerrymanderDown
+          expr: up{job=~".*gerrymander.*"} == 0
+          for: 5m
+          labels: { severity: critical }
+          annotations:
+            summary: "gerrymander is not being scraped"
+            description: "Hostname authority is dark: no conflict detection, no registrations."
+{{- end }}

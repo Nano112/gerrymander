@@ -72,6 +72,12 @@ type Config struct {
 			Namespace string `yaml:"namespace"`
 		} `yaml:"gateway"`
 	} `yaml:"actuator"`
+	// CRDIngest feeds HostnameReservation CRs into the registry (GitOps
+	// input; the database stays truth). Uses the observer's cluster creds.
+	CRDIngest struct {
+		Enabled  bool          `yaml:"enabled"`
+		Interval time.Duration `yaml:"interval"`
+	} `yaml:"crd_ingest"`
 	// DNSSync reconciles per-label records at a DNS provider (experimental;
 	// cloudflare only). Records carry the comment "gerrymander-managed" and
 	// only commented records are ever touched.

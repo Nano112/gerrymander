@@ -29,6 +29,7 @@ import (
 	"github.com/Nano112/gerrymander/internal/client"
 	"github.com/Nano112/gerrymander/internal/config"
 	"github.com/Nano112/gerrymander/internal/core"
+	"github.com/Nano112/gerrymander/internal/crdingest"
 	"github.com/Nano112/gerrymander/internal/dnsserver"
 	"github.com/Nano112/gerrymander/internal/dnssync"
 	"github.com/Nano112/gerrymander/internal/dockerlabels"
@@ -255,6 +256,21 @@ func cmdServe(args []string) error {
 		default:
 			return fmt.Errorf("unknown actuator.provider %q (traefik-crd | gateway-api)", cfg.Actuator.Provider)
 		}
+	}
+
+	if cfg.CRDIngest.Enabled {
+		k8s := k8slite.Config{APIServer: cfg.Observer.APIServer, TokenFile: cfg.Observer.TokenFile, CAFile: cfg.Observer.CAFile, Insecure: cfg.Observer.Insecure}
+		if k8s.APIServer == "" {
+			if k8s, err = k8slite.InCluster(); err != nil {
+				return fmt.Errorf("crd_ingest enabled but no cluster config: %w", err)
+			}
+		}
+		kc, err := k8slite.New(k8s)
+		if err != nil {
+			return fmt.Errorf("crd_ingest client: %w", err)
+		}
+		ing := &crdingest.Ingester{Store: st, Alloc: alloc, Client: kc, Interval: cfg.CRDIngest.Interval, Log: log}
+		go ing.Run(ctx)
 	}
 
 	if cfg.DNSSync.Enabled {

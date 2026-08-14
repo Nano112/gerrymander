@@ -1,0 +1,52 @@
+image:
+  repository: ghcr.io/nano112/gerrymander
+  tag: ""            # defaults to appVersion
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# Zones the registry owns. Profile prod = tenant blocklist policy applies.
+zones:
+  - { name: example.com, profile: prod }
+
+# API key comes from a Secret you create:
+#   kubectl create secret generic gerrymander-api --from-literal=key=$(openssl rand -hex 24)
+apiKeySecret:
+  name: gerrymander-api
+  key: key
+
+observer:
+  enabled: true
+  autoRegister: true
+  interval: 60s
+
+# Write-side. Off by default — read the docs before enabling.
+actuator:
+  enabled: false
+  provider: traefik-crd   # traefik-crd | gateway-api
+  entryPoints: [websecure]
+  interval: 60s
+  gateway: { name: "", namespace: "" }
+
+persistence:
+  size: 1Gi
+  storageClass: ""
+
+service:
+  port: 4780
+  metricsPort: 9091
+
+# ServiceMonitor + PrometheusRule (requires kube-prometheus-stack CRDs).
+monitoring:
+  serviceMonitor: false
+  prometheusRule: false
+
+# Optional Traefik IngressRoute for the API itself.
+ingressRoute:
+  enabled: false
+  host: gerry.example.com
+  entryPoints: [websecure]
+  priority: 10
+
+resources:
+  requests: { cpu: 20m, memory: 48Mi }
+  limits: { memory: 256Mi }

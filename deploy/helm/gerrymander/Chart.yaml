@@ -1,0 +1,8 @@
+apiVersion: v2
+name: gerrymander
+description: Hostname and port control plane — registry, observer, and route actuator
+type: application
+version: 0.5.0
+appVersion: "0.5.0"
+home: https://github.com/Nano112/gerrymander
+sources: [https://github.com/Nano112/gerrymander]

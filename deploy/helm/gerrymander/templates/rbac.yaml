@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-routes
+rules:
+  - apiGroups: ["traefik.io"]
+    resources: ["ingressroutes"]
+    {{- if .Values.actuator.enabled }}
+    # actuator on: writes routes, but only ever those labeled
+    # app.gerrymander/managed=true
+    verbs: ["get", "list", "watch", "create", "update", "delete"]
+    {{- else }}
+    verbs: ["get", "list", "watch"]
+    {{- end }}
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["httproutes"]
+    {{- if .Values.actuator.enabled }}
+    verbs: ["get", "list", "watch", "create", "update", "delete"]
+    {{- else }}
+    verbs: ["get", "list", "watch"]
+    {{- end }}
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-routes
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Name }}-routes
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}
+    namespace: {{ .Release.Namespace }}

@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-config
+  namespace: {{ .Release.Namespace }}
+data:
+  gerry.yaml: |
+    db: /data/gerry.db
+    api:
+      listen: :{{ .Values.service.port }}
+      metrics_listen: :{{ .Values.service.metricsPort }}
+    zones:
+      {{- range .Values.zones }}
+      - { name: {{ .name }}, profile: {{ .profile | default "prod" }} }
+      {{- end }}
+    proxy:
+      enabled: false
+    dns:
+      enabled: false
+    supervise: false
+    observer:
+      enabled: {{ .Values.observer.enabled }}
+      zones: [{{- range $i, $z := .Values.zones }}{{ if $i }}, {{ end }}{{ $z.name }}{{- end }}]
+      auto_register: {{ .Values.observer.autoRegister }}
+      interval: {{ .Values.observer.interval }}
+    actuator:
+      enabled: {{ .Values.actuator.enabled }}
+      provider: {{ .Values.actuator.provider }}
+      zones: [{{- range $i, $z := .Values.zones }}{{ if $i }}, {{ end }}{{ $z.name }}{{- end }}]
+      entry_points: [{{- range $i, $e := .Values.actuator.entryPoints }}{{ if $i }}, {{ end }}{{ $e }}{{- end }}]
+      interval: {{ .Values.actuator.interval }}
+      {{- if eq .Values.actuator.provider "gateway-api" }}
+      gateway:
+        name: {{ .Values.actuator.gateway.name }}
+        namespace: {{ .Values.actuator.gateway.namespace }}
+      {{- end }}
+    ports:
+      ensure_default_pool: false
+    hold_ttl: 30m
