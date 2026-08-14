@@ -3,6 +3,22 @@
 All notable changes to gerrymander. Versions follow [semver](https://semver.org);
 until 1.0, minor bumps may include breaking changes (called out explicitly).
 
+## v0.6.0 — 2026-08-15
+
+### Added
+- **Tailscale**: `dns.advertise: tailscale` answers dev-zone queries with
+  this machine's tailnet IP — split DNS on the tailnet makes your dev
+  hostnames resolve from every device (headscale recipe in the docs).
+- **nginx writer** (`nginx_sync`): one marker-tagged include file rendered
+  from the registry + reload; files without the marker are never
+  overwritten.
+- **Nginx Proxy Manager writer** (`npm_sync`): proxy hosts via NPM's REST
+  API, marker in advanced_config, partial updates so UI-attached
+  certificates survive, UI-made hosts invisible.
+- **MCP**: `rename_hostname` and `registry_status` tools (11 total).
+- **Agent skill** (`skills/gerry`): teaches Claude Code to allocate ports
+  and hostnames through the registry instead of guessing.
+
 ## v0.5.2 — 2026-08-15
 
 - `gerry init` detects the project's dev command: a package.json with a
