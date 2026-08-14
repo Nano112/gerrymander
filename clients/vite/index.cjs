@@ -11,9 +11,9 @@
 // Renaming a domain = edit gerrymander.yaml, restart dev server. If the
 // daemon is unreachable the plugin warns and does nothing — vite still runs
 // on its defaults.
-import fs from "node:fs";
-import path from "node:path";
-import { execFileSync } from "node:child_process";
+const fs = require("node:fs");
+const path = require("node:path");
+const { execFileSync } = require("node:child_process");
 
 const API = process.env.GERRY_API || "http://127.0.0.1:4780";
 
@@ -65,7 +65,7 @@ function tailnetNames() {
   return [];
 }
 
-export default function gerrymander(options = {}) {
+function gerrymander(options = {}) {
   let primaryHost = null;
   let stickyPort = null;
 
@@ -145,3 +145,6 @@ export default function gerrymander(options = {}) {
     },
   };
 }
+
+module.exports = gerrymander;
+module.exports.default = gerrymander; // ESM default-import interop

@@ -868,6 +868,7 @@ func cmdInit(args []string) error {
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
 	name := fs.String("name", "", "project name (default: directory name)")
 	zone := fs.String("zone", "", "zone (default: <name>.<GERRY_TLD or test>)")
+	yes := fs.Bool("yes", false, "answer yes to wizard prompts (vite wiring)")
 	fs.Parse(args)
 	if _, err := os.Stat("gerrymander.yaml"); err == nil {
 		return fmt.Errorf("gerrymander.yaml already exists")
@@ -907,6 +908,11 @@ services:
 	fmt.Printf("wrote gerrymander.yaml (project %s, zone %s)\n", n, z)
 	if devLine != "" {
 		fmt.Printf("detected %s → dev: %s\n", detected, devLine)
+	}
+	viteWizard(*yes)
+	if viteConfigPath() != "" {
+		fmt.Println("next: run your dev command as usual — the plugin does the rest")
+	} else if devLine != "" {
 		fmt.Println("next: gerry dev")
 	} else {
 		fmt.Println("next: add a dev: command, then gerry dev   # or gerry up for routes only")

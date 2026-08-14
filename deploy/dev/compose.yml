@@ -18,6 +18,7 @@ services:
       # ever gains other users.
       - '100.103.181.67:4780:4780'
       - '100.103.181.67:53:5353/udp'
+      - '100.103.181.67:53:5353/tcp'
     volumes:
       - './gerry.yaml:/etc/gerry.yaml:ro'
       - './data:/data'
