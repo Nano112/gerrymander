@@ -75,6 +75,8 @@ type Server struct {
 	// HideMetrics keeps /metrics off this mux (it is being served on a
 	// dedicated listener instead, so a public ingress can't reach it).
 	HideMetrics bool
+	// DNSInfo describes the embedded DNS server for the doctor.
+	DNSInfo map[string]any
 }
 
 var (
@@ -175,6 +177,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/tokens", s.adminOnly(s.handleListTokens))
 	mux.HandleFunc("DELETE /v1/tokens/{name}", s.adminOnly(s.handleRevokeToken))
 	mux.HandleFunc("GET /v1/allocations/{id}/events", s.auth(s.handleAllocationEvents))
+	mux.HandleFunc("GET /v1/dns", s.auth(func(w http.ResponseWriter, r *http.Request) {
+		if s.DNSInfo == nil {
+			writeJSON(w, 200, map[string]any{"enabled": false})
+			return
+		}
+		writeJSON(w, 200, s.DNSInfo)
+	}))
 
 	return instrument(mux)
 }

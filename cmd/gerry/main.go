@@ -348,6 +348,12 @@ func cmdServe(args []string) error {
 	}
 	srv := &api.Server{Store: st, Alloc: alloc, Ports: ports, APIKey: apiKey, Log: log,
 		HideMetrics: cfg.API.MetricsListen != ""}
+	if cfg.DNS.Enabled {
+		srv.DNSInfo = map[string]any{
+			"enabled": true, "listen": cfg.DNS.Listen,
+			"zones": cfg.DNS.Zones, "advertise": cfg.DNS.Advertise,
+		}
+	}
 	if obs != nil {
 		srv.Observer = obs
 	}

@@ -98,6 +98,9 @@ func cmdStatus(args []string) error {
 
 	fmt.Println()
 
+	// Tailnet: serve-termination trap + missing split DNS for advertised zones.
+	tailscaleChecks(rep)
+
 	// Interference: a system-level HTTP proxy (Proxyman, Charles, corporate)
 	// sits between browsers and the dev proxy; when pages fail only in the
 	// browser while curl works, this is almost always why.

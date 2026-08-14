@@ -1,0 +1,23 @@
+# gerry dev-proxy configuration: replaces the hand-maintained Caddyfile.
+db: /data/gerry.db
+api:
+  listen: :4780
+zones:
+  - { name: clair-ai.test, profile: dev }
+  - { name: olsyn.test, profile: dev }
+  - { name: schemati.test, profile: dev }
+  - { name: hire.test, profile: dev }
+proxy:
+  enabled: true
+  http: ":80"
+  tls: ":443"
+  extra_tls_ports: [5173, 5174, 5175, 5176]
+  # Caddy's local root CA, extracted from the old dev-proxy volume, so
+  # existing browser trust keeps working unchanged.
+  ca_cert: /data/ca/root.crt
+  ca_key: /data/ca/root.key
+dns:
+  enabled: false # dnsmasq already wildcards .test on this machine
+supervise: false # container mode cannot supervise host processes
+ports:
+  ensure_default_pool: true

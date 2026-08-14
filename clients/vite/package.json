@@ -1,6 +1,6 @@
 {
   "name": "gerrymander-vite",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Zero-config Vite integration for the gerrymander dev proxy: hostnames, sticky ports, TLS and HMR from your gerrymander.yaml \u2014 just run vite.",
   "type": "module",
   "main": "index.js",

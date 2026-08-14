@@ -10,10 +10,6 @@ services:
       - '127.0.0.1:5175:5175'
       - '127.0.0.1:5176:5176'
       - '127.0.0.1:4780:4780'
-      # tailnet exposure: proxy + dev DNS reachable from peers, loopback
-      # bindings above stay untouched (dnsmasq keeps local .test)
-      - '100.103.181.67:443:443'
-      - '100.103.181.67:53:5353/udp'
     volumes:
       - './gerry.yaml:/etc/gerry.yaml:ro'
       - './data:/data'

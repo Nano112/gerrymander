@@ -50,6 +50,26 @@ GERRY_API=http://100.x.y.z:4780 gerry trust
 material.) Phones: fetch `http://100.x.y.z:4780/v1/ca` in the browser and
 install the profile, or skip trust and accept the warning.
 
+## No console access? The machine-name route
+
+True subdomains of a MagicDNS name (`app.macbook.….ts.net`) cannot
+resolve — MagicDNS has no wildcards. The closest thing that works, with a
+real browser-trusted certificate and zero admin-console changes:
+
+```sh
+tailscale serve --bg --https=8443 http://127.0.0.1:<sticky-port>
+```
+
+gives `https://<machine>.<tailnet>.ts.net:8443` tailnet-wide. Ports 443,
+8443 and 10000 are available, so this scales to three apps; beyond that,
+split DNS is the answer. The gerrymander-vite plugin allows the machine's
+MagicDNS name automatically, so vite accepts these proxied requests.
+
+`gerry status` detects both tailnet traps: a TLS-terminating serve handler
+on :443 in front of the proxy (custom SNI dies before gerry sees it), and
+an advertised zone with no split-DNS route (peers can't resolve, phones
+show "site can't be reached"). Each warning carries its exact fix.
+
 ## What this is good for
 
 - Opening `https://myapp.test` from a phone on the tailnet to test mobile

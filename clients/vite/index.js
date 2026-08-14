@@ -13,6 +13,7 @@
 // on its defaults.
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 
 const API = process.env.GERRY_API || "http://127.0.0.1:4780";
 
@@ -46,6 +47,21 @@ function pickService(services, wanted) {
  * @param {{ service?: string, manifest?: string, https?: boolean }} [options]
  * @returns {import('vite').Plugin}
  */
+// The machine's MagicDNS name (macbook.tailnet.ts.net). Requests proxied by
+// `tailscale serve` keep that Host header, so vite must allow it; detection
+// is best-effort and silent when tailscale is absent.
+function tailnetNames() {
+  const bins = ["tailscale", "/Applications/Tailscale.app/Contents/MacOS/tailscale"];
+  for (const bin of bins) {
+    try {
+      const out = execFileSync(bin, ["status", "--json"], { timeout: 3000, stdio: ["ignore", "pipe", "ignore"] });
+      const dns = JSON.parse(out.toString())?.Self?.DNSName;
+      if (dns) return [dns.replace(/\.$/, "")];
+    } catch {}
+  }
+  return [];
+}
+
 export default function gerrymander(options = {}) {
   let primaryHost = null;
   let stickyPort = null;
@@ -95,6 +111,8 @@ export default function gerrymander(options = {}) {
       const allowedHosts = [
         ...(svc.hostnames ?? []),
         ...(svc.wildcards ?? []).map((w) => `.${w}`), // leading dot = any subdomain
+        ...(options.allowedHosts ?? []),
+        ...tailnetNames(), // machine's MagicDNS name — tailscale serve paths just work
       ];
 
       return {
