@@ -2,10 +2,12 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -13,8 +15,10 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -81,6 +85,10 @@ func main() {
 		err = cmdCAExport(args)
 	case "trust":
 		err = cmdTrust(args)
+	case "setup":
+		err = cmdSetup(args)
+	case "uninstall":
+		err = cmdUninstall(args)
 	case "completion":
 		err = cmdCompletion(args)
 	case "version":
@@ -104,6 +112,9 @@ server:
   serve --config <file>        run API (+ proxy/DNS/observer per config)
   ca-export --dir <dir>        print the local CA root certificate PEM
   trust [--print]              install the daemon's CA into the system trust store
+  setup [--print]              fresh machine: DNS for dev zones + trust, reversibly
+  uninstall [--yes] [--purge]  full cleanse; removes ONLY gerry-marked files/certs
+                               (dry-run by default; can never break your DNS)
 
 client (env: GERRY_API, GERRY_API_KEY):
   claim  --zone Z --label L [--owner O] [--kind tenant|platform] [--hold]
@@ -254,9 +265,11 @@ func cmdServe(args []string) error {
 			p.SetDockerResolver(dockerrelay.NewManager(ports))
 		}
 		go func() {
+			// A busy port must degrade the proxy, not kill the daemon:
+			// the registry API stays useful (and the doctor explains what
+			// holds the port).
 			if err := p.Run(ctx); err != nil && ctx.Err() == nil {
-				log.Error("proxy exited", "err", err)
-				cancel()
+				log.Error("proxy disabled", "err", err, "holder", portHolder(cfg.Proxy.TLS))
 			}
 		}()
 	}
@@ -271,9 +284,51 @@ func cmdServe(args []string) error {
 	log.Info("gerry serve", "version", version, "api", cfg.API.Listen, "db", cfg.DB,
 		"proxy", cfg.Proxy.Enabled, "dns", cfg.DNS.Enabled, "observer", cfg.Observer.Enabled, "supervise", cfg.Supervise)
 	if err := httpSrv.ListenAndServe(); err != http.ErrServerClosed {
+		if strings.Contains(err.Error(), "address already in use") {
+			if otherGerryAt(cfg.API.Listen) {
+				return fmt.Errorf("another gerry daemon already serves %s (container mode running? stop it first: docker compose down in deploy/dev, or gerry service uninstall)", cfg.API.Listen)
+			}
+			return fmt.Errorf("%s is busy (%s) — change api.listen in the config", cfg.API.Listen, portHolder(cfg.API.Listen))
+		}
 		return err
 	}
 	return nil
+}
+
+// portHolder best-effort identifies what listens on an addr ("host:port")
+// so bind-conflict errors name the culprit instead of shrugging.
+func portHolder(addr string) string {
+	i := strings.LastIndex(addr, ":")
+	if i < 0 {
+		return "unknown"
+	}
+	out, err := exec.Command("lsof", "-nP", "-iTCP:"+addr[i+1:], "-sTCP:LISTEN", "-Fc").Output()
+	if err != nil {
+		return "unknown holder"
+	}
+	for _, l := range strings.Split(string(out), "\n") {
+		if strings.HasPrefix(l, "c") {
+			return "held by " + strings.TrimPrefix(l, "c")
+		}
+	}
+	return "unknown holder"
+}
+
+// otherGerryAt reports whether a gerry daemon answers on the API address.
+func otherGerryAt(listen string) bool {
+	host := listen
+	if strings.HasPrefix(host, ":") {
+		host = "127.0.0.1" + host
+	}
+	c := &http.Client{Timeout: 2 * time.Second}
+	resp, err := c.Get("http://" + host + "/healthz")
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	b := make([]byte, 8)
+	n, _ := resp.Body.Read(b)
+	return resp.StatusCode == 200 && strings.HasPrefix(string(b[:n]), "ok")
 }
 
 // --- client commands ---
@@ -431,8 +486,9 @@ func cmdConflicts(args []string) error {
 
 // --- dev ---
 
-// cmdDev is `bun run dev` for everything that isn't vite: apply the
-// manifest, resolve the service's sticky port, exec its dev: command.
+// cmdDev is `bun run dev` for everything that isn't vite. One service runs
+// in the foreground; with no argument every dev:-declared service runs
+// concurrently, procfile-style, with prefixed output and group shutdown.
 func cmdDev(args []string) error {
 	fs := flag.NewFlagSet("dev", flag.ExitOnError)
 	file := fs.String("f", "gerrymander.yaml", "manifest file")
@@ -442,36 +498,33 @@ func cmdDev(args []string) error {
 		return err
 	}
 
-	// pick the service: explicit arg > only one with dev: > error
-	var name string
+	var withDev []string
+	for n, s := range m.Services {
+		if s.Dev != "" {
+			withDev = append(withDev, n)
+		}
+	}
+	sort.Strings(withDev)
+	if len(withDev) == 0 {
+		return fmt.Errorf("no service in %s declares a dev: command", *file)
+	}
+
+	var run []string
 	if fs.NArg() > 0 {
-		name = fs.Arg(0)
+		name := fs.Arg(0)
 		if _, ok := m.Services[name]; !ok {
 			return fmt.Errorf("service %q not in %s", name, *file)
 		}
+		if m.Services[name].Dev == "" {
+			return fmt.Errorf("service %q has no dev: command in %s", name, *file)
+		}
+		run = []string{name}
 	} else {
-		var withDev []string
-		for n, s := range m.Services {
-			if s.Dev != "" {
-				withDev = append(withDev, n)
-			}
-		}
-		switch len(withDev) {
-		case 1:
-			name = withDev[0]
-		case 0:
-			return fmt.Errorf("no service in %s declares a dev: command", *file)
-		default:
-			return fmt.Errorf("several services declare dev: (%s) — pick one: gerry dev <service>", strings.Join(withDev, ", "))
-		}
-	}
-	svc := m.Services[name]
-	if svc.Dev == "" {
-		return fmt.Errorf("service %q has no dev: command in %s", name, *file)
+		run = withDev // all of them
 	}
 
-	// Apply the whole manifest (idempotent) so hostnames route before the
-	// process starts, then run the command on the service's sticky port.
+	// Apply the whole manifest once so hostnames route before anything
+	// starts, then launch each service on its sticky port.
 	c := apiClient()
 	ctx := context.Background()
 	yamlBytes, err := os.ReadFile(*file)
@@ -492,34 +545,111 @@ func cmdDev(args []string) error {
 		fmt.Fprintf(os.Stderr, "gerry: released %s (left the manifest)\n", p)
 	}
 
-	ownerRef := m.Project + "/" + name
-	port := applied.Services[name].Port
-	if port == 0 {
-		var pa core.PortAllocation
-		if err := c.Do(ctx, "POST", "/v1/ports", map[string]any{"pool": "dev", "owner_ref": ownerRef}, &pa); err != nil {
-			return err
+	portFor := func(name string) (int, error) {
+		if p := applied.Services[name].Port; p != 0 {
+			return p, nil
 		}
-		port = pa.Value
+		var pa core.PortAllocation
+		err := c.Do(ctx, "POST", "/v1/ports", map[string]any{"pool": "dev", "owner_ref": m.Project + "/" + name}, &pa)
+		return pa.Value, err
 	}
-	if hosts := applied.Services[name].Hostnames; len(hosts) > 0 {
-		fmt.Fprintf(os.Stderr, "gerry: https://%s → :%d\n", hosts[0], port)
-	} else {
-		fmt.Fprintf(os.Stderr, "gerry: %s → port %d\n", ownerRef, port)
-	}
-
-	cmdline := strings.ReplaceAll(svc.Dev, "{PORT}", strconv.Itoa(port))
 	shell := os.Getenv("SHELL")
 	if shell == "" {
 		shell = "/bin/sh"
 	}
-	cmd := exec.Command(shell, "-c", cmdline)
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-	cmd.Env = append(os.Environ(), "PORT="+strconv.Itoa(port), "GERRY_PORT="+strconv.Itoa(port))
-	if err := cmd.Run(); err != nil {
-		if ee, ok := err.(*exec.ExitError); ok {
-			os.Exit(ee.ExitCode())
+
+	// Single service: plain foreground exec, stdio attached.
+	if len(run) == 1 {
+		name := run[0]
+		port, err := portFor(name)
+		if err != nil {
+			return err
 		}
-		return err
+		if hosts := applied.Services[name].Hostnames; len(hosts) > 0 {
+			fmt.Fprintf(os.Stderr, "gerry: https://%s → :%d\n", hosts[0], port)
+		}
+		cmd := exec.Command(shell, "-c", strings.ReplaceAll(m.Services[name].Dev, "{PORT}", strconv.Itoa(port)))
+		cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+		cmd.Env = append(os.Environ(), "PORT="+strconv.Itoa(port), "GERRY_PORT="+strconv.Itoa(port))
+		if err := cmd.Run(); err != nil {
+			if ee, ok := err.(*exec.ExitError); ok {
+				os.Exit(ee.ExitCode())
+			}
+			return err
+		}
+		return nil
+	}
+
+	// Procfile mode: run everything, prefix output, die together.
+	colors := []string{"\x1b[36m", "\x1b[35m", "\x1b[33m", "\x1b[32m", "\x1b[34m"}
+	if os.Getenv("NO_COLOR") != "" || !isTTY(os.Stdout) {
+		colors = []string{""}
+	}
+	reset := "\x1b[0m"
+	if colors[0] == "" {
+		reset = ""
+	}
+	width := 0
+	for _, n := range run {
+		if len(n) > width {
+			width = len(n)
+		}
+	}
+
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc, os.Interrupt, syscall.SIGTERM)
+	go func() { <-sigc; cancel() }()
+
+	var wg sync.WaitGroup
+	var exitOnce sync.Once
+	exitCode := 0
+	for i, name := range run {
+		port, err := portFor(name)
+		if err != nil {
+			return err
+		}
+		color := colors[i%len(colors)]
+		prefix := fmt.Sprintf("%s%-*s |%s ", color, width, name, reset)
+		if hosts := applied.Services[name].Hostnames; len(hosts) > 0 {
+			fmt.Fprintf(os.Stderr, "%sgerry: https://%s → :%d\n", prefix, hosts[0], port)
+		}
+		cmd := exec.CommandContext(runCtx, shell, "-c", strings.ReplaceAll(m.Services[name].Dev, "{PORT}", strconv.Itoa(port)))
+		cmd.Env = append(os.Environ(), "PORT="+strconv.Itoa(port), "GERRY_PORT="+strconv.Itoa(port))
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM) }
+		stdout, _ := cmd.StdoutPipe()
+		stderr, _ := cmd.StderrPipe()
+		if err := cmd.Start(); err != nil {
+			cancel()
+			return fmt.Errorf("start %s: %w", name, err)
+		}
+		prefixPipe := func(r io.Reader) {
+			defer wg.Done()
+			sc := bufio.NewScanner(r)
+			sc.Buffer(make([]byte, 64*1024), 1024*1024)
+			for sc.Scan() {
+				fmt.Printf("%s%s\n", prefix, sc.Text())
+			}
+		}
+		wg.Add(2)
+		go prefixPipe(stdout)
+		go prefixPipe(stderr)
+		wg.Add(1)
+		go func(prefix string) {
+			defer wg.Done()
+			err := cmd.Wait()
+			if runCtx.Err() == nil { // a service died on its own: stop the set
+				fmt.Fprintf(os.Stderr, "%sexited: %v — stopping the rest\n", prefix, err)
+				exitOnce.Do(func() { exitCode = 1 })
+				cancel()
+			}
+		}(prefix)
+	}
+	wg.Wait()
+	if exitCode != 0 {
+		os.Exit(exitCode)
 	}
 	return nil
 }

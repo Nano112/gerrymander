@@ -45,8 +45,21 @@
         <input type="text" name="label" placeholder="flow" autocomplete="off" spellcheck="false" required />
         <span class="hint" id="avail-hint"></span>
       </label>
-      <label>Backend <span class="hint-inline">host:port the proxy forwards to</span>
+      <label>Backend type
+        <select name="btype" id="claim-btype">
+          <option value="none">none — registry-only reservation</option>
+          <option value="address" selected>address — host:port</option>
+          <option value="docker">docker — unpublished container (auto-relay)</option>
+        </select>
+      </label>
+      <label data-bt="address">Address <span class="hint-inline">host:port the proxy forwards to</span>
         <input type="text" name="backend" placeholder="127.0.0.1:5180" spellcheck="false" />
+      </label>
+      <label data-bt="docker" hidden>Docker network
+        <input type="text" name="dnetwork" placeholder="myproj_default" spellcheck="false" />
+      </label>
+      <label data-bt="docker" hidden>Container <span class="hint-inline">name or network alias : port</span>
+        <input type="text" name="dhost" placeholder="app-container:80" spellcheck="false" />
       </label>
       <label>Extra TLS ports <span class="hint-inline">comma-separated, optional</span>
         <input type="text" name="listen" placeholder="5175" spellcheck="false" />

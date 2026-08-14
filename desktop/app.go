@@ -201,6 +201,10 @@ func allocNode(al core.Allocation) TreeNode {
 			if s := r.Backend.Supervised; s != nil {
 				n.Routes = append(n.Routes, fmt.Sprintf("%s → supervised: %s", listen, s.Cmd))
 			}
+		case "docker":
+			if d := r.Backend.Docker; d != nil {
+				n.Routes = append(n.Routes, fmt.Sprintf("%s → docker %s:%d", listen, d.Host, d.Port))
+			}
 		case "service":
 			if s := r.Backend.Service; s != nil {
 				n.Routes = append(n.Routes, fmt.Sprintf("%s → svc %s/%s:%d", listen, s.Namespace, s.Name, s.Port))
@@ -231,13 +235,14 @@ func attachNode(zone *TreeNode, node TreeNode, label string) {
 
 // ClaimInput is the GUI claim form.
 type ClaimInput struct {
-	Zone     string `json:"zone"`
-	Label    string `json:"label"`
-	Kind     string `json:"kind"` // default platform for dev routing
-	Wildcard bool   `json:"wildcard"`
-	Backend  string `json:"backend"` // "host:port"
-	Listen   []int  `json:"listen"`  // empty = default 443/80
-	Owner    string `json:"owner"`
+	Zone     string              `json:"zone"`
+	Label    string              `json:"label"`
+	Kind     string              `json:"kind"` // default platform for dev routing
+	Wildcard bool                `json:"wildcard"`
+	Backend  string              `json:"backend"` // "host:port" (address backends)
+	Docker   *core.DockerBackend `json:"docker"`  // unpublished container via relay
+	Listen   []int               `json:"listen"`  // empty = default 443/80
+	Owner    string              `json:"owner"`
 }
 
 // Claim creates an allocation with routes.
@@ -246,18 +251,22 @@ func (a *App) Claim(in ClaimInput) error {
 		in.Kind = "platform"
 	}
 	spec := map[string]any{"wildcard": in.Wildcard}
-	if in.Backend != "" {
+	var backend map[string]any
+	switch {
+	case in.Docker != nil:
+		backend = map[string]any{"kind": "docker", "docker": in.Docker}
+	case in.Backend != "":
 		host, port := splitHostPort(in.Backend)
+		backend = map[string]any{"kind": "address", "address": map[string]any{"host": host, "port": port}}
+	}
+	if backend != nil {
 		listens := in.Listen
 		if len(listens) == 0 {
 			listens = []int{0}
 		}
 		var routes []map[string]any
 		for _, l := range listens {
-			routes = append(routes, map[string]any{
-				"listen":  l,
-				"backend": map[string]any{"kind": "address", "address": map[string]any{"host": host, "port": port}},
-			})
+			routes = append(routes, map[string]any{"listen": l, "backend": backend})
 		}
 		spec["routes"] = routes
 	}

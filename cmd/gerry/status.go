@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/Nano112/gerrymander/internal/core"
@@ -96,6 +98,14 @@ func cmdStatus(args []string) error {
 
 	fmt.Println()
 
+	// Interference: a system-level HTTP proxy (Proxyman, Charles, corporate)
+	// sits between browsers and the dev proxy; when pages fail only in the
+	// browser while curl works, this is almost always why.
+	if p := systemProxy(); p != "" {
+		rep.warn("system HTTP proxy active: %s — browser traffic to dev hosts flows through it", p)
+		rep.fix("if pages fail only in the browser, quit/pause the proxy app (its stale sockets outlive daemon restarts)")
+	}
+
 	// 3. DNS + proxy + trust per dev zone (probe one representative host).
 	probed := false
 	for _, z := range zones.Zones {
@@ -153,7 +163,11 @@ func probeZone(rep *statusReport, zone string) {
 	})
 	if err != nil {
 		rep.bad("%-26s proxy: no TLS listener on 127.0.0.1:443 (%v)", zone, err)
-		rep.fix("is the gerry daemon's proxy enabled and port 443 published?")
+		if h := portHolder(":443"); h != "unknown holder" {
+			rep.fix("port 443 is %s — stop it or move gerry's proxy.tls in the config", h)
+		} else {
+			rep.fix("is the gerry daemon's proxy enabled and port 443 published?")
+		}
 		return
 	}
 	leaf := conn.ConnectionState().PeerCertificates[0]
@@ -175,6 +189,38 @@ func probeZone(rep *statusReport, zone string) {
 			rep.ok("%-26s trust: certificate chain verifies against the system trust store", zone)
 		}
 	}
+}
+
+// systemProxy reports an active system/env HTTP proxy, or "".
+func systemProxy() string {
+	for _, v := range []string{"HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"} {
+		if p := os.Getenv(v); p != "" {
+			return p + " (env " + v + ")"
+		}
+	}
+	if runtime.GOOS == "darwin" {
+		out, err := exec.Command("scutil", "--proxy").Output()
+		if err == nil {
+			s := string(out)
+			if strings.Contains(s, "HTTPSEnable : 1") || strings.Contains(s, "HTTPEnable : 1") {
+				host, port := scutilVal(s, "HTTPSProxy"), scutilVal(s, "HTTPSPort")
+				if host == "" {
+					host, port = scutilVal(s, "HTTPProxy"), scutilVal(s, "HTTPPort")
+				}
+				return host + ":" + port + " (system settings)"
+			}
+		}
+	}
+	return ""
+}
+
+func scutilVal(s, key string) string {
+	for _, line := range strings.Split(s, "\n") {
+		if i := strings.Index(line, key+" : "); i > -1 {
+			return strings.TrimSpace(line[i+len(key)+3:])
+		}
+	}
+	return ""
 }
 
 func tld(zone string) string {

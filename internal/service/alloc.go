@@ -176,9 +176,17 @@ func (a *Alloc) claimHostname(ctx context.Context, req ClaimRequest) (*core.Allo
 	if err != nil {
 		return nil, err
 	}
+	// Kind defaults by zone profile: dev zones are single-operator, so an
+	// unqualified claim is infrastructure (platform — blocklist doesn't
+	// apply; it exists to police *tenant signups*). Prod zones keep the
+	// strict tenant default.
 	kind := req.Kind
 	if kind == "" {
-		kind = core.KindTenant
+		if zone.Profile == "dev" {
+			kind = core.KindPlatform
+		} else {
+			kind = core.KindTenant
+		}
 	}
 	label, err := core.Normalize(req.Label, kind)
 	if err != nil {

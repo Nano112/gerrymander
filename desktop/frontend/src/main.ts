@@ -283,6 +283,14 @@ claimForm.addEventListener("input", (ev) => {
   }, 250);
 });
 
+// Backend-type select toggles its field rows.
+const btypeSel = document.getElementById("claim-btype") as HTMLSelectElement;
+btypeSel?.addEventListener("change", () => {
+  claimForm.querySelectorAll<HTMLElement>("[data-bt]").forEach((el) => {
+    el.hidden = el.dataset.bt !== btypeSel.value;
+  });
+});
+
 claimForm.addEventListener("submit", async (ev) => {
   const submitter = (ev as SubmitEvent).submitter as HTMLButtonElement | null;
   if (submitter?.value !== "claim") return;
@@ -292,13 +300,32 @@ claimForm.addEventListener("submit", async (ev) => {
   const listen = listenRaw
     ? [0, ...listenRaw.split(",").map((s) => parseInt(s.trim(), 10)).filter((n) => n > 0)]
     : [];
+  const btype = String(f.get("btype") ?? "address");
+  let backend = "";
+  let docker: { network: string; host: string; port: number } | null = null;
+  if (btype === "address") {
+    backend = String(f.get("backend") ?? "").trim();
+  } else if (btype === "docker") {
+    const hp = String(f.get("dhost") ?? "").trim();
+    const i = hp.lastIndexOf(":");
+    docker = {
+      network: String(f.get("dnetwork") ?? "").trim(),
+      host: i > 0 ? hp.slice(0, i) : hp,
+      port: i > 0 ? parseInt(hp.slice(i + 1), 10) : 80,
+    };
+    if (!docker.network || !docker.host) {
+      $("#claim-error").textContent = "docker backends need a network and a container";
+      return;
+    }
+  }
   try {
     await Claim({
       zone: String(f.get("zone")),
       label: String(f.get("label")).trim(),
       kind: "platform",
       wildcard: f.get("wildcard") === "on",
-      backend: String(f.get("backend") ?? "").trim(),
+      backend,
+      docker,
       listen,
       owner: "desktop",
     } as any);

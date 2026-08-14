@@ -9,6 +9,9 @@ services:
   frontend:
     hostnames: [coolwebsite.test]
     port_pool: dev
+    # `gerry dev` with no argument runs every dev: service together,
+    # procfile-style. The vite plugin still does the claiming/config.
+    dev: cd frontend && bun run dev
   api:
     hostnames: [backend.coolwebsite.test]
     port_pool: dev
