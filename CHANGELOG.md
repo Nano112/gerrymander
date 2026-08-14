@@ -3,6 +3,11 @@
 All notable changes to gerrymander. Versions follow [semver](https://semver.org);
 until 1.0, minor bumps may include breaking changes (called out explicitly).
 
+## v0.7.2 — 2026-08-15
+
+- `gerry tailnet` recognizes the server-side rejection of the
+  dns-subdomain-resolve node attribute and says plainly what it means.
+
 ## v0.7.1 — 2026-08-15
 
 - `gerry update` (brew path) pulls the tap before upgrading, fixing
