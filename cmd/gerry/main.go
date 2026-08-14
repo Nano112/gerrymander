@@ -807,24 +807,60 @@ func cmdInit(args []string) error {
 	if z == "" {
 		z = n + ".test"
 	}
+	devLine, detected := detectDevCommand()
+	dev := "    # dev: npm run dev              # then `gerry dev` runs it on the sticky port\n"
+	if devLine != "" {
+		dev = fmt.Sprintf("    dev: %q%*s# detected from %s\n", devLine, 30-len(devLine), "", detected)
+	}
 	content := fmt.Sprintf(`project: %s
 zone: %s
 services:
-  # With @gerrymander/vite in vite.config, "bun run dev" claims this
-  # hostname and its sticky port automatically. For other tools:
-  #   gerry run --owner %s/frontend -- CMD --port '{PORT}'
   frontend:
     hostnames: [%s, "*.%s"]
     port_pool: dev
-  # api:
+%s  # api:
   #   hostnames: [api.%s]
   #   port_pool: dev
-`, n, z, n, z, z, z)
+  #   dev: uv run uvicorn main:app --port {PORT} --reload
+`, n, z, z, z, dev, z)
 	if err := os.WriteFile("gerrymander.yaml", []byte(content), 0o644); err != nil {
 		return err
 	}
-	fmt.Printf("wrote gerrymander.yaml (project %s, zone %s)\nnext: gerry up   # or just start vite with @gerrymander/vite\n", n, z)
+	fmt.Printf("wrote gerrymander.yaml (project %s, zone %s)\n", n, z)
+	if devLine != "" {
+		fmt.Printf("detected %s → dev: %s\n", detected, devLine)
+		fmt.Println("next: gerry dev")
+	} else {
+		fmt.Println("next: add a dev: command, then gerry dev   # or gerry up for routes only")
+	}
 	return nil
+}
+
+// detectDevCommand inspects the project for a runnable dev command so the
+// scaffolded manifest works without hand-editing. Detection is conservative:
+// only a package.json with a "dev" script qualifies, with the runner picked
+// from the lockfile actually present.
+func detectDevCommand() (cmd, source string) {
+	b, err := os.ReadFile("package.json")
+	if err != nil {
+		return "", ""
+	}
+	var pkg struct {
+		Scripts map[string]string `json:"scripts"`
+	}
+	if json.Unmarshal(b, &pkg) != nil || pkg.Scripts["dev"] == "" {
+		return "", ""
+	}
+	switch {
+	case fileExists("bun.lock") || fileExists("bun.lockb"):
+		return "bun run dev", "package.json + bun.lock"
+	case fileExists("pnpm-lock.yaml"):
+		return "pnpm dev", "package.json + pnpm-lock.yaml"
+	case fileExists("yarn.lock"):
+		return "yarn dev", "package.json + yarn.lock"
+	default:
+		return "npm run dev", "package.json"
+	}
 }
 
 // --- manifest apply/release ---
