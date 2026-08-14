@@ -28,6 +28,8 @@ export function ProcessLogs(arg1:string,arg2:number):Promise<Array<string>>;
 
 export function Release(arg1:number):Promise<void>;
 
+export function Rename(arg1:number,arg2:string):Promise<void>;
+
 export function SaveSettings(arg1:main.Settings):Promise<void>;
 
 export function StartProcess(arg1:string):Promise<void>;

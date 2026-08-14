@@ -77,6 +77,20 @@
     </form>
   </dialog>
 
+  <dialog id="ask-dialog">
+    <form method="dialog" class="dialog-form" id="ask-form">
+      <h2 id="ask-title"></h2>
+      <p id="ask-body" class="ask-body"></p>
+      <label id="ask-input-label" hidden>
+        <input type="text" name="value" id="ask-input" spellcheck="false" autocomplete="off" />
+      </label>
+      <div class="dialog-actions">
+        <button value="cancel" class="btn btn-quiet" formnovalidate>Cancel</button>
+        <button value="ok" class="btn btn-primary" id="ask-ok">OK</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="logs-dialog">
     <div class="dialog-form logs-box">
       <h2 id="logs-title">Logs</h2>

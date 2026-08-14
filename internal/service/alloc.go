@@ -259,6 +259,47 @@ func (a *Alloc) Renew(ctx context.Context, id int64, ttl time.Duration) (core.Al
 	return al, a.Store.UpdateAllocation(ctx, al)
 }
 
+// Rename atomically moves an allocation to a new label in its zone. The new
+// label passes normalization and (for tenants) policy; conflicts surface as
+// *ErrClaimRejected exactly like a claim. Everything else about the
+// allocation — ID, owner, routes, conditions, event history — survives.
+//
+// Scope note: this renames the REGISTRY entry only. Systems that store the
+// hostname themselves (an app's domains table, TLS SANs, bookmarks) are the
+// caller's responsibility.
+func (a *Alloc) Rename(ctx context.Context, id int64, rawLabel string) (core.Allocation, error) {
+	al, err := a.Store.GetAllocation(ctx, id)
+	if err != nil {
+		return al, err
+	}
+	zone, err := a.Store.GetZone(ctx, al.ZoneName)
+	if err != nil {
+		return al, err
+	}
+	label, err := core.Normalize(rawLabel, al.Kind)
+	if err != nil {
+		return al, &ErrClaimRejected{Reason: "invalid", Message: err.Error()}
+	}
+	if label == al.Label {
+		return al, nil // no-op rename
+	}
+	if res := a.policyFor(zone).Check(label, al.Kind); res.Reason != "" {
+		return al, &ErrClaimRejected{Reason: res.Reason, Message: res.Message, Suggestions: a.filterAvailable(ctx, zone, core.Suggest(label))}
+	}
+	err = a.Store.RenameAllocation(ctx, id, label, core.FQDN(label, zone.Name))
+	if errors.Is(err, store.ErrTaken) {
+		reason := "taken"
+		if existing, gerr := a.Store.GetAllocationByLabel(ctx, zone.Name, label); gerr == nil && existing.Kind != core.KindTenant {
+			reason = "reserved"
+		}
+		return al, &ErrClaimRejected{Reason: reason, Message: fmt.Sprintf("%q is %s in %s", label, reason, zone.Name), Suggestions: a.filterAvailable(ctx, zone, core.Suggest(label))}
+	}
+	if err != nil {
+		return al, err
+	}
+	return a.Store.GetAllocation(ctx, id)
+}
+
 // Release transitions to released. The row stays for audit; the unique index
 // ignores nothing, so re-claiming a released label requires deleting the row —
 // ReleaseAndFree does both.

@@ -54,6 +54,10 @@ export function Release(arg1) {
   return window['go']['main']['App']['Release'](arg1);
 }
 
+export function Rename(arg1, arg2) {
+  return window['go']['main']['App']['Rename'](arg1, arg2);
+}
+
 export function SaveSettings(arg1) {
   return window['go']['main']['App']['SaveSettings'](arg1);
 }

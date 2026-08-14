@@ -150,6 +150,60 @@ func TestHoldLifecycle(t *testing.T) {
 	}
 }
 
+func TestRename(t *testing.T) {
+	a, _ := testSvc(t)
+	ctx := context.Background()
+	resp, err := a.Claim(ctx, ClaimRequest{
+		Zone: "olsyn.com", Label: "oldname", OwnerRef: "tenant-9",
+		Spec: core.Spec{Wildcard: true, Routes: []core.Route{{Backend: core.Backend{Kind: "address", Address: &core.AddressBackend{Host: "app", Port: 80}}}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := resp.Allocation.ID
+	a.Claim(ctx, ClaimRequest{Zone: "olsyn.com", Label: "occupied", OwnerRef: "tenant-x"})
+
+	// success keeps identity, spec, owner
+	renamed, err := a.Rename(ctx, id, "NewName") // normalization folds case
+	if err != nil {
+		t.Fatal(err)
+	}
+	if renamed.ID != id || renamed.Label != "newname" || renamed.FQDN != "newname.olsyn.com" {
+		t.Fatalf("rename result: %+v", renamed)
+	}
+	if renamed.OwnerRef != "tenant-9" || !renamed.Spec.Wildcard || len(renamed.Spec.Routes) != 1 {
+		t.Fatalf("identity lost: %+v", renamed)
+	}
+	// old label is free again, atomically
+	if av, _ := a.CheckAvailability(ctx, "olsyn.com", "oldname"); !av.Available {
+		t.Fatalf("old label not freed: %+v", av)
+	}
+
+	// conflict → taken with suggestions, allocation untouched
+	_, err = a.Rename(ctx, id, "occupied")
+	var rej *ErrClaimRejected
+	if !errors.As(err, &rej) || rej.Reason != "taken" {
+		t.Fatalf("rename onto taken: %v", err)
+	}
+	still, _ := a.Store.GetAllocation(ctx, id)
+	if still.Label != "newname" {
+		t.Fatalf("failed rename mutated the row: %+v", still)
+	}
+
+	// policy still guards tenant renames
+	if _, err = a.Rename(ctx, id, "grafana"); !errors.As(err, &rej) || rej.Reason != "blocked" {
+		t.Fatalf("rename onto blocked: %v", err)
+	}
+	// invalid label
+	if _, err = a.Rename(ctx, id, "-bad-"); !errors.As(err, &rej) || rej.Reason != "invalid" {
+		t.Fatalf("rename invalid: %v", err)
+	}
+	// no-op rename succeeds
+	if _, err = a.Rename(ctx, id, "newname"); err != nil {
+		t.Fatalf("no-op rename: %v", err)
+	}
+}
+
 func TestReleaseFreesLabel(t *testing.T) {
 	a, _ := testSvc(t)
 	ctx := context.Background()

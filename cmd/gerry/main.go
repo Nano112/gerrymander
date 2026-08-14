@@ -52,6 +52,8 @@ func main() {
 		err = cmdLs(args)
 	case "release":
 		err = cmdRelease(args)
+	case "rename":
+		err = cmdRename(args)
 	case "conflicts":
 		err = cmdConflicts(args)
 	case "up":
@@ -89,6 +91,7 @@ client (env: GERRY_API, GERRY_API_KEY):
   avail  --zone Z --label L
   ls     [--zone Z] [--owner O]
   release --id N
+  rename --id N --label NEW       atomic; keeps id/owner/routes/history
   conflicts
   up     [-f gerrymander.yaml]  apply a project manifest
   down   [-f gerrymander.yaml]  release a project manifest
@@ -314,6 +317,19 @@ func cmdRelease(args []string) error {
 	id := fs.Int64("id", 0, "allocation id")
 	fs.Parse(args)
 	return apiClient().Do(context.Background(), "DELETE", "/v1/allocations/"+strconv.FormatInt(*id, 10), nil, nil)
+}
+
+func cmdRename(args []string) error {
+	fs := flag.NewFlagSet("rename", flag.ExitOnError)
+	id := fs.Int64("id", 0, "allocation id")
+	label := fs.String("label", "", "new label")
+	fs.Parse(args)
+	var out map[string]any
+	if err := apiClient().Do(context.Background(), "POST", fmt.Sprintf("/v1/allocations/%d/rename", *id), map[string]any{"label": *label}, &out); err != nil {
+		return err
+	}
+	printJSON(out)
+	return nil
 }
 
 func cmdConflicts(args []string) error {

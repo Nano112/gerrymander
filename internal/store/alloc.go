@@ -204,6 +204,31 @@ func (s *Store) UpdateAllocation(ctx context.Context, a core.Allocation) error {
 	return err
 }
 
+// RenameAllocation atomically moves an allocation to a new label. The same
+// unique index that guards claims guards renames: a conflict maps to
+// ErrTaken and the row is untouched. ID, owner, spec, status, and history
+// all survive.
+func (s *Store) RenameAllocation(ctx context.Context, id int64, newLabel, newFQDN string) error {
+	old, err := s.GetAllocation(ctx, id)
+	if err != nil {
+		return err
+	}
+	res, err := s.db.ExecContext(ctx, s.q(`
+		UPDATE allocations SET label = ?, fqdn = ?, updated_at = ? WHERE id = ?`),
+		newLabel, newFQDN, time.Now().UTC(), id)
+	if err != nil {
+		if isUnique(err) {
+			return ErrTaken
+		}
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	s.appendEvent(ctx, "allocation", id, "rename", old.Label, newLabel, old.OwnerRef)
+	return nil
+}
+
 // DeleteAllocation removes a row outright (used for released cleanup; normal
 // release is a state transition).
 func (s *Store) DeleteAllocation(ctx context.Context, id int64) error {

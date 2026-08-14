@@ -1,7 +1,7 @@
 // Gerrymander desktop frontend. Talks to the Go backend via Wails bindings.
 import {
   GetStatus, GetTree, GetPorts, GetProcesses, GetSettings, SaveSettings,
-  Claim, Release, Availability, KillPort, StartProcess, StopProcess,
+  Claim, Release, Rename, Availability, KillPort, StartProcess, StopProcess,
   ProcessLogs, OpenURL, DaemonUp, DaemonDown,
 } from "../wailsjs/go/main/App";
 
@@ -22,6 +22,44 @@ interface TreeNode {
 
 let currentView: View = "districts";
 let apiUp = false;
+
+/* ---------- dialog helpers (WKWebView has no reliable confirm/prompt) ---------- */
+
+interface AskOpts {
+  title: string;
+  body?: string;
+  input?: { placeholder?: string; value?: string };
+  okLabel?: string;
+  danger?: boolean;
+}
+
+function ask(opts: AskOpts): Promise<string | null> {
+  const dlg = document.getElementById("ask-dialog") as HTMLDialogElement;
+  const input = document.getElementById("ask-input") as HTMLInputElement;
+  const inputLabel = document.getElementById("ask-input-label") as HTMLElement;
+  const ok = document.getElementById("ask-ok") as HTMLButtonElement;
+  (document.getElementById("ask-title") as HTMLElement).textContent = opts.title;
+  (document.getElementById("ask-body") as HTMLElement).textContent = opts.body ?? "";
+  inputLabel.hidden = !opts.input;
+  input.value = opts.input?.value ?? "";
+  input.placeholder = opts.input?.placeholder ?? "";
+  ok.textContent = opts.okLabel ?? "OK";
+  ok.className = opts.danger ? "btn btn-primary danger" : "btn btn-primary";
+  return new Promise((resolve) => {
+    const done = () => {
+      dlg.removeEventListener("close", done);
+      if (dlg.returnValue !== "ok") return resolve(null);
+      resolve(opts.input ? input.value.trim() : "ok");
+    };
+    dlg.addEventListener("close", done);
+    dlg.showModal();
+    if (opts.input) input.focus();
+  });
+}
+
+const confirmAsk = async (title: string, body: string, okLabel = "Confirm") =>
+  (await ask({ title, body, okLabel, danger: true })) !== null;
+const notify = (title: string, body: string) => ask({ title, body, okLabel: "Close" });
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
 const view = $("#view");
@@ -158,9 +196,27 @@ function renderNode(n: TreeNode): HTMLElement {
     actions.append(open);
   }
   if (n.id) {
+    const ren = el("button", "btn btn-quiet", "Rename") as HTMLButtonElement;
+    ren.onclick = async () => {
+      const base = n.label.startsWith("*.") ? n.label.slice(2) : n.label;
+      const next = await ask({
+        title: `Rename ${n.fqdn}`,
+        body: "The allocation keeps its owner, routes, and history. Systems that store this hostname themselves (app database, bookmarks) are not updated.",
+        input: { value: base === "@" ? "" : base, placeholder: "new-label" },
+        okLabel: "Rename",
+      });
+      if (!next || next === base) return;
+      try {
+        await Rename(n.id!, next);
+        render();
+      } catch (e) {
+        await notify("Rename failed", String(e));
+      }
+    };
+    actions.append(ren);
     const rel = el("button", "btn btn-quiet btn-danger", "Release") as HTMLButtonElement;
     rel.onclick = async () => {
-      if (!confirm(`Release ${n.fqdn}? Traffic to it stops immediately.`)) return;
+      if (!(await confirmAsk(`Release ${n.fqdn}?`, "Traffic to this hostname stops immediately and the label becomes claimable by anyone.", "Release"))) return;
       try { await Release(n.id!); render(); } catch (e) { alertError(String(e)); }
     };
     actions.append(rel);
@@ -268,7 +324,8 @@ async function renderPorts() {
     kill.title = "SIGTERM, then SIGKILL after 2s. Hold ⌥ for immediate SIGKILL.";
     kill.onclick = async (ev) => {
       const force = (ev as MouseEvent).altKey;
-      if (!confirm(`${force ? "Force kill" : "Kill"} ${l.command} (pid ${l.pid}) on port ${l.port}?`)) return;
+      const how = force ? "SIGKILL immediately" : "SIGTERM first, SIGKILL after 2s";
+      if (!(await confirmAsk(`${force ? "Force kill" : "Kill"} ${l.command}?`, `pid ${l.pid} on port ${l.port} — ${how}.`, force ? "Force kill" : "Kill"))) return;
       kill.disabled = true;
       try { await KillPort(l.pid, force); } catch (e) { alertError(String(e)); }
       setTimeout(render, 500);
@@ -436,5 +493,6 @@ refreshStatus().then(render);
 window.setInterval(refreshStatus, 3000);
 window.setInterval(() => {
   // Passive refresh only for data views; dialogs left alone.
-  if (!claimDialog.open && !settingsDialog.open && !logsDialog.open) render();
+  const askDialog = document.getElementById("ask-dialog") as HTMLDialogElement;
+  if (!claimDialog.open && !settingsDialog.open && !logsDialog.open && !askDialog.open) render();
 }, 5000);

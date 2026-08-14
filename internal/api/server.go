@@ -97,6 +97,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/allocations/{id}", s.auth(s.handleGetAllocation))
 	mux.HandleFunc("PATCH /v1/allocations/{id}", s.auth(s.handlePatchAllocation))
 	mux.HandleFunc("POST /v1/allocations/{id}/commit", s.auth(s.handleCommit))
+	mux.HandleFunc("POST /v1/allocations/{id}/rename", s.auth(s.handleRename))
 	mux.HandleFunc("POST /v1/allocations/{id}/renew", s.auth(s.handleRenew))
 	mux.HandleFunc("DELETE /v1/allocations/{id}", s.auth(s.handleRelease))
 	mux.HandleFunc("GET /v1/ports", s.auth(s.handleListPorts))
@@ -300,6 +301,39 @@ func (s *Server) handleCommit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	mTransitions.WithLabelValues("pending", "active").Inc()
+	writeJSON(w, 200, a)
+}
+
+func (s *Server) handleRename(w http.ResponseWriter, r *http.Request) {
+	id, ok := s.pathID(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		Label string `json:"label"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Label == "" {
+		writeErr(w, 400, "invalid", "body must be {\"label\": \"newname\"}")
+		return
+	}
+	a, err := s.Alloc.Rename(r.Context(), id, body.Label)
+	if err != nil {
+		var rej *service.ErrClaimRejected
+		if errors.As(err, &rej) {
+			code := 409
+			if rej.Reason == "invalid" {
+				code = 400
+			}
+			writeJSON(w, code, map[string]any{"error": rej.Reason, "message": rej.Message, "suggestions": rej.Suggestions})
+			return
+		}
+		if errors.Is(err, store.ErrNotFound) {
+			writeErr(w, 404, "not_found", "no such allocation")
+			return
+		}
+		writeErr(w, 500, "internal", err.Error())
+		return
+	}
 	writeJSON(w, 200, a)
 }
 

@@ -272,6 +272,11 @@ func (a *App) Release(id int64) error {
 	return a.api().Do(a.ctx, "DELETE", fmt.Sprintf("/v1/allocations/%d", id), nil, nil)
 }
 
+// Rename moves an allocation to a new label, keeping id/owner/routes.
+func (a *App) Rename(id int64, label string) error {
+	return a.api().Do(a.ctx, "POST", fmt.Sprintf("/v1/allocations/%d/rename", id), map[string]any{"label": label}, nil)
+}
+
 // Availability proxies the availability check for the claim form.
 func (a *App) Availability(zone, label string) (map[string]any, error) {
 	var out map[string]any
