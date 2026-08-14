@@ -13,6 +13,10 @@ services:
       # tailnet exposure: proxy + dev DNS reachable from peers, loopback
       # bindings above stay untouched (dnsmasq keeps local .test)
       - '100.103.181.67:443:443'
+      # registry API on the tailnet: keyless by design here — every device
+      # on this personal tailnet may claim/release. Revisit if the tailnet
+      # ever gains other users.
+      - '100.103.181.67:4780:4780'
       - '100.103.181.67:53:5353/udp'
     volumes:
       - './gerry.yaml:/etc/gerry.yaml:ro'

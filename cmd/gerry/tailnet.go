@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
 	"os/exec"
 	"strings"
 	"time"
@@ -96,9 +97,28 @@ func cmdTailnet(args []string) error {
 	// ---- trust ------------------------------------------------------
 	fmt.Println()
 	fmt.Println("device trust (routes 1 & 2 use gerry's CA):")
-	fmt.Printf("  laptops:  GERRY_API=http://%s:4780 gerry trust\n", self.ip)
-	fmt.Printf("  phones:   open http://%s:4780/v1/ca and install the profile (or tap through the warning once)\n", self.ip)
+	if apiOnTailnet(self.ip) {
+		fmt.Printf("  laptops:  GERRY_API=http://%s:4780 gerry trust\n", self.ip)
+		fmt.Printf("  phones:   open http://%s:4780/v1/ca and install the profile (or tap through the warning once)\n", self.ip)
+	} else {
+		fmt.Printf("  ✗ the API is not reachable at %s:4780, so peers cannot fetch the CA.\n", self.ip)
+		fmt.Println("    host mode: set api.listen to \":4780\" (an API key becomes required off-loopback)")
+		fmt.Printf("    container mode: publish it in compose:  - '%s:4780:4780'\n", self.ip)
+		fmt.Println("    then `gerry tailnet` again; the trust instructions appear here once it answers")
+	}
 	return nil
+}
+
+// apiOnTailnet reports whether the daemon's API answers on the tailnet
+// address — required for peers to run `gerry trust` or fetch /v1/ca.
+func apiOnTailnet(ip string) bool {
+	c := &http.Client{Timeout: 3 * time.Second}
+	resp, err := c.Get("http://" + ip + ":4780/healthz")
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == 200
 }
 
 type tsSelf struct {
