@@ -160,21 +160,58 @@ CREATE INDEX IF NOT EXISTS idx_alloc_state ON allocations(state);
 CREATE INDEX IF NOT EXISTS idx_events_subject ON events(subject_type, subject_id);
 `}
 
+// migrate runs every migration past the DB's recorded schema version.
+// Versioning: SQLite uses PRAGMA user_version; Postgres a schema_migrations
+// row. Migration 1 (the baseline) is written with IF NOT EXISTS throughout,
+// so pre-versioning databases adopt version 1 without change.
 func (s *Store) migrate(ctx context.Context) error {
-	ddl := migrations[0]
-	if s.postgres {
-		ddl = strings.ReplaceAll(ddl, "INTEGER PRIMARY KEY", "BIGSERIAL PRIMARY KEY")
+	current, err := s.schemaVersion(ctx)
+	if err != nil {
+		return err
 	}
-	for _, stmt := range strings.Split(ddl, ";") {
-		stmt = strings.TrimSpace(stmt)
-		if stmt == "" {
-			continue
+	for v := current; v < len(migrations); v++ {
+		ddl := migrations[v]
+		if s.postgres {
+			ddl = strings.ReplaceAll(ddl, "INTEGER PRIMARY KEY", "BIGSERIAL PRIMARY KEY")
 		}
-		if _, err := s.db.ExecContext(ctx, stmt); err != nil {
-			return fmt.Errorf("%q: %w", stmt[:min(len(stmt), 60)], err)
+		for _, stmt := range strings.Split(ddl, ";") {
+			stmt = strings.TrimSpace(stmt)
+			if stmt == "" {
+				continue
+			}
+			if _, err := s.db.ExecContext(ctx, stmt); err != nil {
+				return fmt.Errorf("migration %d %q: %w", v+1, stmt[:min(len(stmt), 60)], err)
+			}
+		}
+		if err := s.setSchemaVersion(ctx, v+1); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+func (s *Store) schemaVersion(ctx context.Context) (int, error) {
+	if s.postgres {
+		if _, err := s.db.ExecContext(ctx,
+			"CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER NOT NULL)"); err != nil {
+			return 0, err
+		}
+		var v int
+		err := s.db.QueryRowContext(ctx, "SELECT COALESCE(MAX(version), 0) FROM schema_migrations").Scan(&v)
+		return v, err
+	}
+	var v int
+	err := s.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&v)
+	return v, err
+}
+
+func (s *Store) setSchemaVersion(ctx context.Context, v int) error {
+	if s.postgres {
+		_, err := s.db.ExecContext(ctx, "INSERT INTO schema_migrations (version) VALUES ($1)", v)
+		return err
+	}
+	_, err := s.db.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", v))
+	return err
 }
 
 func min(a, b int) int {

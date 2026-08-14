@@ -41,7 +41,7 @@ import (
 	"github.com/Nano112/gerrymander/internal/supervise"
 )
 
-var version = "0.1.0"
+var version = "dev" // overridden at build time via -ldflags "-X main.version=..."
 
 func main() {
 	if len(os.Args) < 2 {
