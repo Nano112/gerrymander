@@ -7,6 +7,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -111,6 +112,7 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET /v1/zones", s.auth(s.handleZones))
 	mux.HandleFunc("POST /v1/zones", s.auth(s.handleCreateZone))
+	mux.HandleFunc("DELETE /v1/zones/{zone}", s.auth(s.handleDeleteZone))
 	mux.HandleFunc("GET /v1/zones/{zone}/availability", s.auth(s.handleAvailability))
 	mux.HandleFunc("POST /v1/claims", s.auth(s.handleClaim))
 	mux.HandleFunc("POST /v1/allocations", s.auth(s.handleClaim)) // alias
@@ -184,6 +186,29 @@ func (s *Server) handleCreateZone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 201, z)
+}
+
+func (s *Server) handleDeleteZone(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("zone")
+	allocs, err := s.Store.ListAllocations(r.Context(), store.AllocFilter{Zone: name, ExcludeReleased: true})
+	if err != nil {
+		writeErr(w, 500, "internal", err.Error())
+		return
+	}
+	if len(allocs) > 0 {
+		writeErr(w, 409, "not_empty", fmt.Sprintf("zone %s still has %d allocation(s) — release them first", name, len(allocs)))
+		return
+	}
+	if err := s.Store.DeleteZone(r.Context(), name); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeErr(w, 404, "not_found", "no such zone")
+			return
+		}
+		writeErr(w, 500, "internal", err.Error())
+		return
+	}
+	s.mutated()
+	w.WriteHeader(204)
 }
 
 func (s *Server) handleAvailability(w http.ResponseWriter, r *http.Request) {

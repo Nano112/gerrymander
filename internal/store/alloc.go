@@ -43,6 +43,18 @@ func (s *Store) GetZone(ctx context.Context, name string) (core.Zone, error) {
 	return z, nil
 }
 
+// DeleteZone removes an empty zone by name (the API guards emptiness).
+func (s *Store) DeleteZone(ctx context.Context, name string) error {
+	res, err := s.db.ExecContext(ctx, s.q(`DELETE FROM zones WHERE name = ?`), name)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // ListZones returns all zones.
 func (s *Store) ListZones(ctx context.Context) ([]core.Zone, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id, name, profile, wildcard_mode, dns_provider, ingress_provider, policy, created_at FROM zones ORDER BY name`)

@@ -338,7 +338,7 @@ func cmdClaim(args []string) error {
 	zone := fs.String("zone", "", "zone")
 	label := fs.String("label", "", "label")
 	owner := fs.String("owner", "", "owner_ref")
-	kind := fs.String("kind", "tenant", "kind")
+	kind := fs.String("kind", "", "kind (default: platform in dev zones, tenant in prod)")
 	hold := fs.Bool("hold", false, "hold instead of active claim")
 	pool := fs.String("port-pool", "", "also claim a sticky port from this pool")
 	fs.Parse(args)
@@ -373,19 +373,33 @@ func cmdPort(args []string) error {
 }
 
 func cmdZone(args []string) error {
-	if len(args) < 1 || args[0] != "add" {
-		return fmt.Errorf("usage: gerry zone add --name Z [--profile dev|prod]")
+	if len(args) < 1 {
+		return fmt.Errorf("usage: gerry zone add|rm --name Z")
 	}
-	fs := flag.NewFlagSet("zone add", flag.ExitOnError)
-	name := fs.String("name", "", "zone name")
-	profile := fs.String("profile", "dev", "profile")
-	fs.Parse(args[1:])
-	var out map[string]any
-	if err := apiClient().Do(context.Background(), "POST", "/v1/zones", map[string]any{"name": *name, "profile": *profile}, &out); err != nil {
-		return err
+	switch args[0] {
+	case "add":
+		fs := flag.NewFlagSet("zone add", flag.ExitOnError)
+		name := fs.String("name", "", "zone name")
+		profile := fs.String("profile", "dev", "profile")
+		fs.Parse(args[1:])
+		var out map[string]any
+		if err := apiClient().Do(context.Background(), "POST", "/v1/zones", map[string]any{"name": *name, "profile": *profile}, &out); err != nil {
+			return err
+		}
+		printJSON(out)
+		return nil
+	case "rm":
+		fs := flag.NewFlagSet("zone rm", flag.ExitOnError)
+		name := fs.String("name", "", "zone name")
+		fs.Parse(args[1:])
+		if err := apiClient().Do(context.Background(), "DELETE", "/v1/zones/"+*name, nil, nil); err != nil {
+			return err
+		}
+		fmt.Println("removed zone", *name)
+		return nil
+	default:
+		return fmt.Errorf("usage: gerry zone add|rm --name Z")
 	}
-	printJSON(out)
-	return nil
 }
 
 func cmdAvail(args []string) error {
