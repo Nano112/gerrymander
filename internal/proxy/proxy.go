@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -69,6 +70,15 @@ func New(st *store.Store, ca *CA, starter Starter, opts Options) *Proxy {
 
 // SetDockerResolver enables docker relay backends.
 func (p *Proxy) SetDockerResolver(d DockerResolver) { p.docker = d }
+
+// RequestRebuild refreshes the route table immediately (called by the API
+// after mutations, so a claim routes on the very next request instead of
+// after the poll interval). Synchronous on purpose: the rebuild is one
+// small query, and returning before it lands would leave a race the caller
+// can observe.
+func (p *Proxy) RequestRebuild() {
+	p.table.Rebuild(context.Background(), p.store)
+}
 
 // Table exposes the route table (tests, diagnostics).
 func (p *Proxy) Table() *Table { return p.table }
@@ -161,6 +171,16 @@ func (p *Proxy) handler(listenPort int) http.Handler {
 	})
 }
 
+// localBackendHost resolves the "@local" sentinel: dev processes run on the
+// machine's host, which a containerized daemon reaches via docker's magic
+// name and a host daemon reaches on loopback.
+func localBackendHost() string {
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		return "host.docker.internal"
+	}
+	return "127.0.0.1"
+}
+
 // describeBackend renders a backend target for error pages when no URL was
 // resolved (e.g. supervision failed before an address existed).
 func describeBackend(t Target) string {
@@ -195,7 +215,11 @@ func (p *Proxy) upstreamFor(ctx context.Context, t Target) (*url.URL, error) {
 		if port == 0 {
 			port = 80
 		}
-		return &url.URL{Scheme: scheme, Host: net.JoinHostPort(b.Address.Host, strconv.Itoa(port))}, nil
+		host := b.Address.Host
+		if host == "@local" {
+			host = localBackendHost()
+		}
+		return &url.URL{Scheme: scheme, Host: net.JoinHostPort(host, strconv.Itoa(port))}, nil
 	case "supervised":
 		if p.starter == nil {
 			return nil, fmt.Errorf("supervised backend but supervision is disabled")

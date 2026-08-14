@@ -79,6 +79,8 @@ func main() {
 		err = cmdMCP(args)
 	case "ca-export":
 		err = cmdCAExport(args)
+	case "trust":
+		err = cmdTrust(args)
 	case "completion":
 		err = cmdCompletion(args)
 	case "version":
@@ -101,6 +103,7 @@ usage: gerry <command> [flags]
 server:
   serve --config <file>        run API (+ proxy/DNS/observer per config)
   ca-export --dir <dir>        print the local CA root certificate PEM
+  trust [--print]              install the daemon's CA into the system trust store
 
 client (env: GERRY_API, GERRY_API_KEY):
   claim  --zone Z --label L [--owner O] [--kind tenant|platform] [--hold]
@@ -243,6 +246,8 @@ func cmdServe(args []string) error {
 			HTTPAddr: cfg.Proxy.HTTP, TLSAddr: cfg.Proxy.TLS,
 			ExtraTLSPorts: cfg.Proxy.ExtraTLSPorts, Log: log,
 		})
+		srv.CAPEM = ca.RootPEM()
+		srv.OnMutation = p.RequestRebuild
 		// Docker relay backends need the docker CLI on this host (host
 		// mode); enabled opportunistically.
 		if _, err := exec.LookPath("docker"); err == nil {
@@ -372,13 +377,43 @@ func cmdRelease(args []string) error {
 	return apiClient().Do(context.Background(), "DELETE", "/v1/allocations/"+strconv.FormatInt(*id, 10), nil, nil)
 }
 
+// cmdRename supports both spellings:
+//
+//	gerry rename gv.olsyn.test newname     (positional, human)
+//	gerry rename --id 12 --label newname   (flags, scripts)
 func cmdRename(args []string) error {
 	fs := flag.NewFlagSet("rename", flag.ExitOnError)
 	id := fs.Int64("id", 0, "allocation id")
 	label := fs.String("label", "", "new label")
 	fs.Parse(args)
+	ctx := context.Background()
+	c := apiClient()
+
+	targetID, newLabel := *id, *label
+	if targetID == 0 && fs.NArg() == 2 {
+		fqdn := strings.ToLower(fs.Arg(0))
+		newLabel = fs.Arg(1)
+		var out struct {
+			Allocations []core.Allocation `json:"allocations"`
+		}
+		if err := c.Do(ctx, "GET", "/v1/allocations", nil, &out); err != nil {
+			return err
+		}
+		for _, a := range out.Allocations {
+			if a.FQDN == fqdn {
+				targetID = a.ID
+				break
+			}
+		}
+		if targetID == 0 {
+			return fmt.Errorf("no allocation for %q (see: gerry ls)", fqdn)
+		}
+	}
+	if targetID == 0 || newLabel == "" {
+		return fmt.Errorf("usage: gerry rename <fqdn> <new-label>   (or --id N --label X)")
+	}
 	var out map[string]any
-	if err := apiClient().Do(context.Background(), "POST", fmt.Sprintf("/v1/allocations/%d/rename", *id), map[string]any{"label": *label}, &out); err != nil {
+	if err := c.Do(ctx, "POST", fmt.Sprintf("/v1/allocations/%d/rename", targetID), map[string]any{"label": newLabel}, &out); err != nil {
 		return err
 	}
 	printJSON(out)
@@ -683,6 +718,16 @@ func cmdMCP(args []string) error {
 
 // --- ca export ---
 
+// proxyEnsureCA loads-or-creates the host CA dir and returns the root PEM
+// (shared by ca-export and trust's offline fallback).
+func proxyEnsureCA(dir string) ([]byte, error) {
+	ca, err := proxy.EnsureCA(dir)
+	if err != nil {
+		return nil, err
+	}
+	return ca.RootPEM(), nil
+}
+
 func cmdCAExport(args []string) error {
 	fs := flag.NewFlagSet("ca-export", flag.ExitOnError)
 	dir := fs.String("dir", "", "CA directory (default <db dir>/ca)")
@@ -692,11 +737,11 @@ func cmdCAExport(args []string) error {
 		home, _ := os.UserHomeDir()
 		d = filepath.Join(home, ".gerrymander", "ca")
 	}
-	ca, err := proxy.EnsureCA(d)
+	pem, err := proxyEnsureCA(d)
 	if err != nil {
 		return err
 	}
-	os.Stdout.Write(ca.RootPEM())
+	os.Stdout.Write(pem)
 	return nil
 }
 

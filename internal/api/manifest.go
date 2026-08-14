@@ -159,5 +159,6 @@ func (s *Server) handleManifestApply(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.Services[name] = res
 	}
+	s.mutated()
 	writeJSON(w, 200, resp)
 }

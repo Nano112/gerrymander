@@ -65,6 +65,18 @@ type Server struct {
 	Observer ConflictReporter
 	// ProcessCtl, when set, exposes supervisor endpoints.
 	ProcessCtl ProcessController
+	// OnMutation, when set, fires after any write that changes routing —
+	// the proxy uses it to refresh its table without waiting for the poll.
+	OnMutation func()
+	// CAPEM, when set, is served at GET /v1/ca so `gerry trust` can fetch
+	// the exact CA the proxy mints with (public material, unauthenticated).
+	CAPEM []byte
+}
+
+func (s *Server) mutated() {
+	if s.OnMutation != nil {
+		s.OnMutation()
+	}
 }
 
 // ProcessController is implemented by the supervisor.
@@ -88,6 +100,14 @@ func (s *Server) Handler() http.Handler {
 		io.WriteString(w, "ok\n")
 	})
 	mux.Handle("GET /metrics", promhttp.Handler())
+	mux.HandleFunc("GET /v1/ca", func(w http.ResponseWriter, r *http.Request) {
+		if len(s.CAPEM) == 0 {
+			writeErr(w, 404, "not_found", "this daemon runs no proxy / has no CA")
+			return
+		}
+		w.Header().Set("Content-Type", "application/x-pem-file")
+		w.Write(s.CAPEM)
+	})
 
 	mux.HandleFunc("GET /v1/zones", s.auth(s.handleZones))
 	mux.HandleFunc("POST /v1/zones", s.auth(s.handleCreateZone))
@@ -228,6 +248,7 @@ func (s *Server) handleClaim(w http.ResponseWriter, r *http.Request) {
 		body, _ := json.Marshal(resp)
 		s.Store.RememberIdempotent(r.Context(), idem, string(body))
 	}
+	s.mutated()
 	writeJSON(w, 201, resp)
 }
 
@@ -310,6 +331,7 @@ func (s *Server) handlePatchAllocation(w http.ResponseWriter, r *http.Request) {
 	if patch.State != nil && from != a.State {
 		mTransitions.WithLabelValues(string(from), string(a.State)).Inc()
 	}
+	s.mutated()
 	writeJSON(w, 200, a)
 }
 
@@ -324,6 +346,7 @@ func (s *Server) handleCommit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	mTransitions.WithLabelValues("pending", "active").Inc()
+	s.mutated()
 	writeJSON(w, 200, a)
 }
 
@@ -357,6 +380,7 @@ func (s *Server) handleRename(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, "internal", err.Error())
 		return
 	}
+	s.mutated()
 	writeJSON(w, 200, a)
 }
 
@@ -391,6 +415,7 @@ func (s *Server) handleRelease(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	mTransitions.WithLabelValues("active", "released").Inc()
+	s.mutated()
 	w.WriteHeader(204)
 }
 

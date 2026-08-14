@@ -251,7 +251,10 @@ func backendFrom(name, address, portPool string, sup *SupervisedSpec, dock *Dock
 		if err != nil {
 			return core.Backend{}, fmt.Errorf("service %q port: %w", name, err)
 		}
-		return core.Backend{Kind: "address", Address: &core.AddressBackend{Host: "host.docker.internal", Port: port}}, nil
+		// "@local" = the machine the dev process runs on. The proxy resolves
+		// it per its own environment: 127.0.0.1 for a host daemon,
+		// host.docker.internal when the daemon runs in a container.
+		return core.Backend{Kind: "address", Address: &core.AddressBackend{Host: "@local", Port: port}}, nil
 	}
 	return core.Backend{}, fmt.Errorf("service %q: no backend", name)
 }
