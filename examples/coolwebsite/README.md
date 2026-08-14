@@ -4,7 +4,7 @@ The canonical "two hostnames, one project" dev setup:
 
 | | |
 |---|---|
-| `https://coolwebsite.test` | Vite + React (@gerrymander/vite — `bun run dev` is the whole interface), HMR over `wss://coolwebsite.test` |
+| `https://coolwebsite.test` | Vite + React (gerrymander-vite — `bun run dev` is the whole interface), HMR over `wss://coolwebsite.test` |
 | `https://backend.coolwebsite.test` | FastAPI via `gerry run` (uvicorn --reload), CORS to the frontend origin |
 
 Renaming a hostname = edit `gerrymander.yaml`, restart the dev server: the

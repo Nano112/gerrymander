@@ -1,14 +1,21 @@
 {
-  "name": "@gerrymander/vite",
+  "name": "gerrymander-vite",
   "version": "0.1.0",
-  "description": "Zero-config Vite integration for the gerrymander dev proxy: hostnames, sticky ports, TLS and HMR from your gerrymander.yaml — just run vite.",
+  "description": "Zero-config Vite integration for the gerrymander dev proxy: hostnames, sticky ports, TLS and HMR from your gerrymander.yaml \u2014 just run vite.",
   "type": "module",
   "main": "index.js",
   "types": "index.d.ts",
-  "files": ["index.js", "index.d.ts", "README.md"],
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "README.md"
+  ],
   "peerDependencies": {
     "vite": ">=5"
   },
   "license": "MIT",
-  "repository": "github:Nano112/gerrymander"
+  "repository": "github:Nano112/gerrymander",
+  "publishConfig": {
+    "access": "public"
+  }
 }

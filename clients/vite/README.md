@@ -1,9 +1,9 @@
-# @gerrymander/vite
+# gerrymander-vite
 
 One plugin line; then `bun run dev` (or `npm run dev`) is the whole workflow.
 
 ```ts
-import gerrymander from "@gerrymander/vite";
+import gerrymander from "gerrymander-vite";
 
 export default defineConfig({
   plugins: [react(), gerrymander()],

@@ -1,0 +1,147 @@
+# gerrymander as a production hostname registry: proxy/DNS off, observer on.
+# Traefik (or any ingress) remains the dataplane; gerry is the authority on
+# who owns which hostname, and the watchdog for drift.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gerrymander
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gerrymander
+  namespace: gerrymander
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: gerrymander-observer
+rules:
+  - apiGroups: ["traefik.io"]
+    resources: ["ingressroutes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: gerrymander-observer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: gerrymander-observer
+subjects:
+  - kind: ServiceAccount
+    name: gerrymander
+    namespace: gerrymander
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gerrymander-data
+  namespace: gerrymander
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gerrymander-config
+  namespace: gerrymander
+data:
+  gerry.yaml: |
+    db: /data/gerry.db
+    api:
+      listen: :4780
+    zones:
+      - { name: example.com, profile: prod }
+    proxy:
+      enabled: false
+    dns:
+      enabled: false
+    supervise: false
+    observer:
+      enabled: true
+      zones: [example.com]
+      auto_register: true
+      interval: 60s
+    ports:
+      ensure_default_pool: false
+    hold_ttl: 30m
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gerrymander
+  namespace: gerrymander
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # RWO volume
+  selector:
+    matchLabels: { app: gerrymander }
+  template:
+    metadata:
+      labels: { app: gerrymander }
+    spec:
+      serviceAccountName: gerrymander
+      containers:
+        - name: gerry
+          image: ghcr.io/OWNER/gerrymander:VERSION
+          args: ["serve", "--config", "/etc/gerry/gerry.yaml"]
+          ports:
+            - { containerPort: 4780, name: api }
+          env:
+            - name: GERRY_API_KEY
+              valueFrom:
+                secretKeyRef: { name: gerrymander-api, key: key }
+          volumeMounts:
+            - { name: data, mountPath: /data }
+            - { name: config, mountPath: /etc/gerry }
+          readinessProbe:
+            httpGet: { path: /readyz, port: 4780 }
+            initialDelaySeconds: 2
+          livenessProbe:
+            httpGet: { path: /healthz, port: 4780 }
+            initialDelaySeconds: 5
+          resources:
+            requests: { cpu: 20m, memory: 48Mi }
+            limits: { memory: 256Mi }
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: gerrymander-data }
+        - name: config
+          configMap: { name: gerrymander-config }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gerrymander
+  namespace: gerrymander
+spec:
+  selector: { app: gerrymander }
+  ports:
+    - { port: 4780, targetPort: 4780, name: api }
+---
+# Route for the API. NOTE for Traefik estates with a low-priority tenant
+# catch-all (HostRegexp at priority 1): every bare-Host route must carry a
+# HIGHER priority or ties lose traffic non-deterministically — the exact
+# failure mode gerry's shadow check exists to catch.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: gerrymander
+  namespace: gerrymander
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: Host(`gerry.example.com`)
+      kind: Rule
+      priority: 10
+      services:
+        - { name: gerrymander, port: 4780 }

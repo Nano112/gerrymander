@@ -7,7 +7,7 @@
     "dev": "vite"
   },
   "dependencies": {
-    "@gerrymander/vite": "file:../../../clients/vite",
+    "gerrymander-vite": "file:../../../clients/vite",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

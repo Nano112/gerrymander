@@ -60,6 +60,7 @@ Around that core:
 
 ```sh
 go install github.com/Nano112/gerrymander/cmd/gerry@latest
+# vite projects: bun add -d gerrymander-vite   (or npm i -D)
 gerry serve --config gerry.yaml &          # api + proxy + optional DNS
 gerry claim --zone myapp.test --label api  # claim a hostname
 gerry port --owner myapp/vite              # sticky port, 51000+
@@ -86,6 +87,11 @@ services:
 ```
 
 ## Desktop app
+
+<p align="center">
+  <img src="docs/assets/desktop-map.png" alt="the district map" width="680">
+</p>
+
 
 `desktop/` is a native app (Wails: Go backend + web UI — macOS now, the same
 codebase targets Linux and Windows) for managing the local environment:

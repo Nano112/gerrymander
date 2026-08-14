@@ -8,3 +8,7 @@ deploy/dev/data/
 # stray build artifacts
 desktop/desktop
 /gerry
+
+# machine-local daemon config + project manifests (see *.example.yaml)
+deploy/dev/gerry.yaml
+deploy/dev/manifests/

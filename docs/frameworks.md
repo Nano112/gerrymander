@@ -6,7 +6,7 @@ its port*:
 
 | Mechanism | For | How |
 |---|---|---|
-| `@gerrymander/vite` plugin | Anything vite-based | One plugin line; applies the manifest, sets port/allowedHosts/origin/HMR itself |
+| `gerrymander-vite` plugin | Anything vite-based | One plugin line; applies the manifest, sets port/allowedHosts/origin/HMR itself |
 | `gerry run` | Everything else | `gerry run --owner proj/svc -- CMD --port '{PORT}'` — sets `$PORT`, substitutes `{PORT}`, execs |
 
 Verification status is labeled honestly: ✅ ran here end-to-end, 🔶 same
@@ -16,7 +16,7 @@ primitives, not yet exercised.
 
 ```ts
 // vite.config.ts
-import gerrymander from "@gerrymander/vite";
+import gerrymander from "gerrymander-vite";
 export default defineConfig({ plugins: [react(), gerrymander()] });
 ```
 `bun run dev` / `npm run dev` is the whole workflow. Verified end-to-end in
@@ -44,7 +44,7 @@ gerry run --owner myproj/api -- bun run server.ts
 
 ## 🔶 SvelteKit / Astro / Nuxt — plugin (vite-based)
 
-All three embed vite, so `@gerrymander/vite` slots into their vite plugin
+All three embed vite, so `gerrymander-vite` slots into their vite plugin
 arrays:
 
 ```js

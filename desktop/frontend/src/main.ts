@@ -327,7 +327,7 @@ async function renderProjects() {
   if (!projects.length) {
     renderEmpty(
       "No projects yet",
-      "A project appears here when a gerrymander.yaml is applied — by `gerry up`, or automatically when a dev server using @gerrymander/vite starts.",
+      "A project appears here when a gerrymander.yaml is applied — by `gerry up`, or automatically when a dev server using gerrymander-vite starts.",
     );
     return;
   }

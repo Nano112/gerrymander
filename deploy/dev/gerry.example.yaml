@@ -1,0 +1,24 @@
+# gerry daemon config for the docker dev-proxy (copy to gerry.yaml).
+# Prefer host mode (`gerry service install`) on a dev machine — it enables
+# supervised backends. The container form exists for setups whose backends
+# are docker-network aliases.
+db: /data/gerry.db
+api:
+  listen: :4780
+zones:
+  - { name: myproject.test, profile: dev }
+proxy:
+  enabled: true
+  http: ":80"
+  tls: ":443"
+  extra_tls_ports: [5173]
+  # Bring your own CA (e.g. one already trusted on this machine) by
+  # mounting root.crt/root.key here; otherwise gerry generates one —
+  # trust it once via `gerry ca-export`.
+  ca_cert: /data/ca/root.crt
+  ca_key: /data/ca/root.key
+dns:
+  enabled: false # enable if nothing wildcards your dev TLD to loopback yet
+supervise: false # container mode cannot supervise host processes
+ports:
+  ensure_default_pool: true

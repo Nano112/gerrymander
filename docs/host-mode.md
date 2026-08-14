@@ -28,7 +28,7 @@ The container and host daemons want the same ports (80/443/517x/4780), so
 this is a swap, not a coexistence:
 
 1. **Backends must be reachable from the host.** Container-mode manifests
-   reach docker-network aliases (`olsyn-app:80`); host mode cannot. Every
+   reach docker-network aliases (`my-app:80`); host mode cannot. Every
    such backend needs a published port and a manifest edit to
    `127.0.0.1:<published>` — or a move to `supervised:`. Do this first.
 2. Copy the CA so browser trust survives:
