@@ -30,6 +30,7 @@ import (
 	"github.com/Nano112/gerrymander/internal/config"
 	"github.com/Nano112/gerrymander/internal/core"
 	"github.com/Nano112/gerrymander/internal/dnsserver"
+	"github.com/Nano112/gerrymander/internal/dnssync"
 	"github.com/Nano112/gerrymander/internal/dockerlabels"
 	"github.com/Nano112/gerrymander/internal/dockerrelay"
 	"github.com/Nano112/gerrymander/internal/k8slite"
@@ -254,6 +255,26 @@ func cmdServe(args []string) error {
 		default:
 			return fmt.Errorf("unknown actuator.provider %q (traefik-crd | gateway-api)", cfg.Actuator.Provider)
 		}
+	}
+
+	if cfg.DNSSync.Enabled {
+		if cfg.DNSSync.Provider != "cloudflare" {
+			return fmt.Errorf("dns_sync.provider %q not supported (cloudflare)", cfg.DNSSync.Provider)
+		}
+		tokenEnv := cfg.DNSSync.APITokenEnv
+		if tokenEnv == "" {
+			tokenEnv = "CLOUDFLARE_API_TOKEN"
+		}
+		token := os.Getenv(tokenEnv)
+		if token == "" {
+			return fmt.Errorf("dns_sync enabled but %s is empty", tokenEnv)
+		}
+		var zones []dnssync.CFZone
+		for _, z := range cfg.DNSSync.Zones {
+			zones = append(zones, dnssync.CFZone{Zone: z.Zone, CFZoneID: z.CFZoneID, Target: z.Target, Proxied: z.Proxied})
+		}
+		cf := &dnssync.Cloudflare{Store: st, Token: token, Zones: zones, Interval: cfg.DNSSync.Interval, Log: log}
+		go cf.Run(ctx)
 	}
 
 	apiKey := os.Getenv(cfg.API.KeyEnv)

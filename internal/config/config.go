@@ -72,6 +72,21 @@ type Config struct {
 			Namespace string `yaml:"namespace"`
 		} `yaml:"gateway"`
 	} `yaml:"actuator"`
+	// DNSSync reconciles per-label records at a DNS provider (experimental;
+	// cloudflare only). Records carry the comment "gerrymander-managed" and
+	// only commented records are ever touched.
+	DNSSync struct {
+		Enabled     bool   `yaml:"enabled"`
+		Provider    string `yaml:"provider"`      // "cloudflare"
+		APITokenEnv string `yaml:"api_token_env"` // default CLOUDFLARE_API_TOKEN
+		Zones       []struct {
+			Zone     string `yaml:"zone"`
+			CFZoneID string `yaml:"cf_zone_id"`
+			Target   string `yaml:"target"` // CNAME target or A-record IP
+			Proxied  bool   `yaml:"proxied"`
+		} `yaml:"zones"`
+		Interval time.Duration `yaml:"interval"`
+	} `yaml:"dns_sync"`
 	Ports struct {
 		EnsureDefaultPool bool `yaml:"ensure_default_pool"`
 	} `yaml:"ports"`
