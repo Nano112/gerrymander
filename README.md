@@ -120,15 +120,25 @@ observer on. The app checks availability at signup; the observer imports
 everything the cluster actually routes; `/v1/conflicts` and the
 `gerry_conflicts` metric surface drift.
 
+## Docs
+
+- [`docs/frameworks.md`](docs/frameworks.md) — recipes: Vite plugin, Next,
+  SvelteKit/Astro, FastAPI, Bun.serve, Rails (labeled verified/unverified)
+- [`docs/host-mode.md`](docs/host-mode.md) — `gerry service install` and the
+  container→host migration
+- [`examples/coolwebsite`](examples/coolwebsite) — the canonical two-hostname
+  project, end-to-end
+- `gerry status` — the built-in doctor when anything misbehaves
+
 ## Status
 
-v0.1 — built 2026-08-14, dogfooding on the author's dev machine (replacing a
-Caddy dev proxy) and production cluster (registry for a multi-tenant zone).
-Race invariants are tested under `-race`; see `docs/superpowers/specs/` for
-the full design and `docs/runbook-*.md` for the dogfood setups.
+v0.3 — actively dogfooded since day one on the author's dev machine
+(replacing a hand-maintained Caddy dev proxy) and a production k3s cluster
+(registry + drift observer for a multi-tenant wildcard zone). Race
+invariants tested under `-race`.
 
-Deferred (designed, not yet built): `dns/cloudflare`, `ingress/caddy`,
-`dns/dnsmasq` writers, `HostnameReservation` CRD, admin UI.
+Deferred by design: `dns/cloudflare`, `ingress/caddy`, `dns/dnsmasq`
+writers, `HostnameReservation` CRD, admin UI, Linux/Windows desktop builds.
 
 ## License
 
