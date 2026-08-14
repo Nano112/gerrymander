@@ -94,17 +94,8 @@ services:
 
 ## Desktop app
 
-<p align="center">
-  <img src="docs/assets/desktop-map.png" alt="the district map" width="680">
-</p>
-
-
 `desktop/` is a native app (Wails: Go backend + web UI — macOS now, the same
 codebase targets Linux and Windows) for managing the local environment:
-
-<p align="center">
-  <img src="docs/assets/desktop-districts.png" alt="Gerrymander desktop — districts view" width="640">
-</p>
 
 - **Districts** — the zone tree: every hostname, its routes, owner, and state,
   with claim (live availability check + suggestions) and release.
