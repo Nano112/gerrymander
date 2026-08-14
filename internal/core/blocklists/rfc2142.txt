@@ -1,0 +1,20 @@
+# RFC 2142 mailbox names + universally expected infrastructure labels.
+www
+mail
+smtp
+pop
+pop3
+imap
+ftp
+webmaster
+postmaster
+hostmaster
+usenet
+news
+abuse
+noc
+security
+sales
+support
+marketing
+info
