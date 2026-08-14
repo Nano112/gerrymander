@@ -1,0 +1,41 @@
+site_name: gerrymander
+site_description: A hostname and port control plane — dev to prod, one authority
+site_url: https://nano112.github.io/gerrymander/
+repo_url: https://github.com/Nano112/gerrymander
+repo_name: Nano112/gerrymander
+
+theme:
+  name: material
+  logo: assets/gerry-icon.png
+  favicon: assets/gerry-icon.png
+  palette:
+    - scheme: default
+      primary: deep purple
+      toggle: { icon: material/weather-night, name: dark mode }
+    - scheme: slate
+      primary: deep purple
+      toggle: { icon: material/weather-sunny, name: light mode }
+  features:
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Quickstart: quickstart.md
+  - Local dev:
+      - Frameworks: frameworks.md
+      - Host mode: host-mode.md
+      - Coexistence: coexistence.md
+  - Production:
+      - Kubernetes: kubernetes.md
+      - Scoped tokens: tokens.md
+  - AI agents (MCP): agents.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true
