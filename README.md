@@ -1,5 +1,9 @@
 # gerrymander
 
+<p align="center">
+  <img src="docs/assets/gerry.png" alt="the gerrymander gopher drawing districts" width="520">
+</p>
+
 **A hostname and port control plane** — one authority for *who owns which
 hostname* in a wildcard zone, and *which process owns which port* on a dev
 machine. The same binary, model, and CLI run on a laptop and in production.
