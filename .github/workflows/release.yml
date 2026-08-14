@@ -1,0 +1,38 @@
+name: release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  binaries:
+    strategy:
+      matrix:
+        include:
+          # Darwin builds run on macOS so the cgo resolver (which honours
+          # /etc/resolver — the mechanism dev DNS uses there) stays enabled.
+          - { runner: macos-latest, goos: darwin, goarch: arm64, cgo: "1" }
+          - { runner: macos-latest, goos: darwin, goarch: amd64, cgo: "1" }
+          - { runner: ubuntu-latest, goos: linux, goarch: amd64, cgo: "0" }
+          - { runner: ubuntu-latest, goos: linux, goarch: arm64, cgo: "0" }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: ${{ matrix.cgo }}
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" \
+            -o gerry_${{ matrix.goos }}_${{ matrix.goarch }} ./cmd/gerry
+          tar czf gerry_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz \
+            gerry_${{ matrix.goos }}_${{ matrix.goarch }}
+      - name: attach to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" gerry_*.tar.gz --clobber

@@ -79,6 +79,8 @@ func main() {
 		err = cmdMCP(args)
 	case "ca-export":
 		err = cmdCAExport(args)
+	case "completion":
+		err = cmdCompletion(args)
 	case "version":
 		fmt.Println("gerry", version)
 	default:

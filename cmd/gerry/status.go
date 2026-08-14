@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"runtime"
 	"time"
 
 	"github.com/Nano112/gerrymander/internal/core"
@@ -17,11 +18,18 @@ import (
 // screen: daemon, registry, DNS resolution, proxy TLS, CA trust, each with
 // a concrete fix when it fails.
 
-const (
-	okMark   = "\x1b[32m✓\x1b[0m"
-	badMark  = "\x1b[31m✗\x1b[0m"
-	warnMark = "\x1b[33m!\x1b[0m"
-)
+// Color only when talking to a human terminal (and NO_COLOR unset).
+var okMark, badMark, warnMark, dimOn, dimOff = func() (string, string, string, string, string) {
+	if os.Getenv("NO_COLOR") != "" || !isTTY(os.Stdout) {
+		return "ok", "XX", " !", "", ""
+	}
+	return "\x1b[32m✓\x1b[0m", "\x1b[31m✗\x1b[0m", "\x1b[33m!\x1b[0m", "\x1b[2m", "\x1b[0m"
+}()
+
+func isTTY(f *os.File) bool {
+	st, err := f.Stat()
+	return err == nil && st.Mode()&os.ModeCharDevice != 0
+}
 
 type statusReport struct{ failures int }
 
@@ -32,7 +40,7 @@ func (s *statusReport) bad(f string, a ...any) {
 	fmt.Printf("  %s %s\n", badMark, fmt.Sprintf(f, a...))
 }
 func (s *statusReport) fix(f string, a ...any) {
-	fmt.Printf("      \x1b[2m→ %s\x1b[0m\n", fmt.Sprintf(f, a...))
+	fmt.Printf("      %s→ %s%s\n", dimOn, fmt.Sprintf(f, a...), dimOff)
 }
 
 func cmdStatus(args []string) error {
@@ -122,7 +130,11 @@ func probeZone(rep *statusReport, zone string) {
 	addrs, err := net.DefaultResolver.LookupHost(context.Background(), host)
 	if err != nil || len(addrs) == 0 {
 		rep.bad("%-26s DNS: %s does not resolve", zone, host)
-		rep.fix("dnsmasq: address=/.%s/127.0.0.1 + /etc/resolver/%s → nameserver 127.0.0.1", tld(zone), tld(zone))
+		if runtime.GOOS == "darwin" {
+			rep.fix("dnsmasq: address=/.%s/127.0.0.1 + /etc/resolver/%s → nameserver 127.0.0.1", tld(zone), tld(zone))
+		} else {
+			rep.fix("dnsmasq: address=/.%s/127.0.0.1 (and point resolv.conf/systemd-resolved at it)", tld(zone))
+		}
 		rep.fix("or enable gerry's embedded DNS in the daemon config")
 		return
 	}
@@ -152,10 +164,15 @@ func probeZone(rep *statusReport, zone string) {
 	roots, _ := x509.SystemCertPool()
 	if roots != nil {
 		if _, err := leaf.Verify(x509.VerifyOptions{Roots: roots, DNSName: host}); err != nil {
-			rep.warn("%-26s trust: browsers will warn — CA %q is not in the system keychain", zone, issuer)
-			rep.fix("gerry ca-export > /tmp/gerry-ca.pem && sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain /tmp/gerry-ca.pem")
+			rep.warn("%-26s trust: browsers will warn — CA %q is not trusted by the system", zone, issuer)
+			if runtime.GOOS == "darwin" {
+				rep.fix("gerry ca-export > /tmp/gerry-ca.pem && sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain /tmp/gerry-ca.pem")
+			} else {
+				rep.fix("gerry ca-export | sudo tee /usr/local/share/ca-certificates/gerry.crt && sudo update-ca-certificates   # Debian/Ubuntu")
+				rep.fix("or: gerry ca-export > gerry.pem && sudo trust anchor gerry.pem   # Fedora/Arch (p11-kit)")
+			}
 		} else {
-			rep.ok("%-26s trust: certificate chain verifies against the system keychain", zone)
+			rep.ok("%-26s trust: certificate chain verifies against the system trust store", zone)
 		}
 	}
 }
