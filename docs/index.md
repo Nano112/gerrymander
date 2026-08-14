@@ -8,6 +8,8 @@
 hostname* in a wildcard zone, and *which process owns which port* on a dev
 machine. The same binary, model, and CLI run on a laptop and in production.
 
+![gerry init → gerry dev demo](assets/demo.gif)
+
 ## Sixty seconds to a real hostname
 
 ```bash

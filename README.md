@@ -14,6 +14,10 @@
 hostname* in a wildcard zone, and *which process owns which port* on a dev
 machine. The same binary, model, and CLI run on a laptop and in production.
 
+<p align="center">
+  <img src="docs/assets/demo.gif" alt="gerry init, one dev: line, gerry dev — a claimed hostname with a sticky port" width="760">
+</p>
+
 > The name: the original 1812 gerrymander was a salamander-shaped district.
 > This tool draws the districts fairly.
 
