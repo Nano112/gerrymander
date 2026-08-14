@@ -3,6 +3,14 @@
 All notable changes to gerrymander. Versions follow [semver](https://semver.org);
 until 1.0, minor bumps may include breaking changes (called out explicitly).
 
+## v0.6.2 — 2026-08-15
+
+- `gerry update [--check]`: self-update from the latest release (atomic
+  replace; Homebrew installs defer to brew).
+- bootstrap surfaces the tailnet integration when tailscale is present.
+- gerrymander-vite allows machine-name subdomains for tailnets with the
+  dns-subdomain-resolve node capability.
+
 ## v0.6.1 — 2026-08-15
 
 - gerry status detects the two tailnet traps (TLS-terminating serve handler
