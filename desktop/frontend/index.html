@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gerrymander</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="topbar" style="--wails-draggable:drag">
+      <div class="brand">
+        <span class="brand-mark">⌘</span>
+        <h1>Gerrymander</h1>
+        <span class="brand-sub">district office</span>
+      </div>
+      <div class="top-status" id="status-area">
+        <span class="pill pill-wait" id="daemon-pill">probing…</span>
+        <span class="counts" id="counts"></span>
+      </div>
+      <div class="top-actions" style="--wails-draggable:no-drag">
+        <button id="daemon-toggle" class="btn btn-quiet" hidden></button>
+        <button id="settings-btn" class="btn btn-quiet" title="Settings">Settings</button>
+      </div>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab active" role="tab" data-view="districts">Districts</button>
+      <button class="tab" role="tab" data-view="ports">Ports</button>
+      <button class="tab" role="tab" data-view="processes">Processes</button>
+    </nav>
+
+    <main id="view"></main>
+  </div>
+
+  <dialog id="claim-dialog">
+    <form method="dialog" class="dialog-form" id="claim-form">
+      <h2>Claim a hostname</h2>
+      <label>Zone
+        <input type="text" name="zone" readonly />
+      </label>
+      <label>Label
+        <input type="text" name="label" placeholder="flow" autocomplete="off" spellcheck="false" required />
+        <span class="hint" id="avail-hint"></span>
+      </label>
+      <label>Backend <span class="hint-inline">host:port the proxy forwards to</span>
+        <input type="text" name="backend" placeholder="127.0.0.1:5180" spellcheck="false" />
+      </label>
+      <label>Extra TLS ports <span class="hint-inline">comma-separated, optional</span>
+        <input type="text" name="listen" placeholder="5175" spellcheck="false" />
+      </label>
+      <label class="check"><input type="checkbox" name="wildcard" /> Also match every subdomain (wildcard)</label>
+      <div class="dialog-actions">
+        <button value="cancel" class="btn btn-quiet" formnovalidate>Cancel</button>
+        <button value="claim" class="btn btn-primary" id="claim-submit">Claim hostname</button>
+      </div>
+      <p class="dialog-error" id="claim-error"></p>
+    </form>
+  </dialog>
+
+  <dialog id="settings-dialog">
+    <form method="dialog" class="dialog-form" id="settings-form">
+      <h2>Settings</h2>
+      <label>API base
+        <input type="text" name="api" spellcheck="false" />
+      </label>
+      <label>API key <span class="hint-inline">blank for the local daemon</span>
+        <input type="password" name="api_key" spellcheck="false" />
+      </label>
+      <label>Daemon compose directory
+        <input type="text" name="compose_dir" spellcheck="false" />
+      </label>
+      <div class="dialog-actions">
+        <button value="cancel" class="btn btn-quiet" formnovalidate>Cancel</button>
+        <button value="save" class="btn btn-primary">Save changes</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="logs-dialog">
+    <div class="dialog-form logs-box">
+      <h2 id="logs-title">Logs</h2>
+      <pre id="logs-body">…</pre>
+      <div class="dialog-actions">
+        <button class="btn btn-quiet" id="logs-close">Close</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="/src/main.ts" type="module"></script>
+</body>
+</html>

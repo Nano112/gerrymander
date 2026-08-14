@@ -85,6 +85,28 @@ services:
       idle_timeout: 30m
 ```
 
+## Desktop app
+
+`desktop/` is a native app (Wails: Go backend + web UI — macOS now, the same
+codebase targets Linux and Windows) for managing the local environment:
+
+<p align="center">
+  <img src="docs/assets/desktop-districts.png" alt="Gerrymander desktop — districts view" width="640">
+</p>
+
+- **Districts** — the zone tree: every hostname, its routes, owner, and state,
+  with claim (live availability check + suggestions) and release.
+- **Ports** — every listening TCP socket on the machine (lsof), cross-marked
+  with registry grants, with graceful kill (SIGTERM → 2s → SIGKILL; ⌥-click
+  for immediate SIGKILL) — the port-killer workflow, registry-aware.
+- **Processes** — supervised services: start, stop, live log tail.
+- Header controls start/stop the local daemon (docker compose) and point the
+  app at any gerry instance (local or remote) in Settings.
+
+```sh
+cd desktop && wails build   # produces build/bin/Gerrymander.app
+```
+
 ## Production (registry mode)
 
 `deploy/k8s/` runs gerry as the hostname authority for a zone: proxy off,
