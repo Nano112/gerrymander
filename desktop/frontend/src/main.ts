@@ -4,8 +4,10 @@ import {
   Claim, CreateZone, Release, Rename, Availability, KillPort, StartProcess, StopProcess,
   ProcessLogs, OpenURL, DaemonUp, DaemonDown,
 } from "../wailsjs/go/main/App";
+import { renderMap } from "./map";
+import iconUrl from "./assets/gerry-icon.png";
 
-type View = "districts" | "projects" | "ports" | "processes";
+type View = "map" | "districts" | "projects" | "ports" | "processes";
 
 interface TreeNode {
   id?: number;
@@ -20,8 +22,10 @@ interface TreeNode {
   children?: TreeNode[];
 }
 
-let currentView: View = "districts";
+let currentView: View = "map";
 let apiUp = false;
+
+(document.getElementById("brand-icon") as HTMLImageElement).src = iconUrl;
 
 /* ---------- dialog helpers (WKWebView has no reliable confirm/prompt) ---------- */
 
@@ -541,6 +545,10 @@ function renderEmpty(title: string, body: string) {
 
 function render() {
   switch (currentView) {
+    case "map":
+      if (apiUp) renderMap(view, renderEmpty);
+      else renderEmpty("The registry is offline", "Start the local daemon to draw the district map.");
+      break;
     case "districts": renderDistricts(); break;
     case "projects": renderProjects(); break;
     case "ports": renderPorts(); break;

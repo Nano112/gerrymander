@@ -362,6 +362,132 @@ func (a *App) GetProjects() ([]ProjectView, error) {
 	return out, nil
 }
 
+// --- map view ---
+
+// MapEdge is one routed connection from a hostname to a backend.
+type MapEdge struct {
+	Backend string `json:"backend"` // canonical backend id, e.g. "olsyn-app:80"
+	Listen  int    `json:"listen"`  // 0 = default 443/80
+}
+
+// MapHost is a hostname node on the district map.
+type MapHost struct {
+	ID       int64     `json:"id"`
+	Label    string    `json:"label"`
+	FQDN     string    `json:"fqdn"`
+	Kind     string    `json:"kind"`
+	State    string    `json:"state"`
+	Wildcard bool      `json:"wildcard"`
+	Owner    string    `json:"owner,omitempty"`
+	Project  string    `json:"project,omitempty"`
+	Edges    []MapEdge `json:"edges,omitempty"`
+}
+
+// MapBackend is a deduplicated upstream node.
+type MapBackend struct {
+	ID   string `json:"id"`   // "olsyn-app:80", "host:51000", "supervised:…"
+	Kind string `json:"kind"` // address | host | supervised | service
+	Name string `json:"name"` // display
+	Sub  string `json:"sub"`  // secondary line (port / cmd)
+}
+
+// MapZone groups hosts per zone territory.
+type MapZone struct {
+	Name    string    `json:"name"`
+	Profile string    `json:"profile"`
+	Hosts   []MapHost `json:"hosts"`
+}
+
+// MapData is everything the Map view draws.
+type MapData struct {
+	Zones    []MapZone    `json:"zones"`
+	Backends []MapBackend `json:"backends"`
+}
+
+// GetMap returns the structured routing graph.
+func (a *App) GetMap() (MapData, error) {
+	var zones struct {
+		Zones []core.Zone `json:"zones"`
+	}
+	if err := a.api().Do(a.ctx, "GET", "/v1/zones", nil, &zones); err != nil {
+		return MapData{}, err
+	}
+	var allocs struct {
+		Allocations []core.Allocation `json:"allocations"`
+	}
+	if err := a.api().Do(a.ctx, "GET", "/v1/allocations", nil, &allocs); err != nil {
+		return MapData{}, err
+	}
+
+	backends := map[string]MapBackend{}
+	backendOrder := []string{}
+	addBackend := func(b core.Backend) string {
+		var mb MapBackend
+		switch {
+		case b.Kind == "address" && b.Address != nil:
+			host := b.Address.Host
+			kind := "address"
+			name := host
+			if host == "host.docker.internal" || host == "127.0.0.1" || host == "localhost" {
+				kind, name = "host", "this mac"
+			}
+			mb = MapBackend{
+				ID:   fmt.Sprintf("%s:%d", host, b.Address.Port),
+				Kind: kind, Name: name, Sub: fmt.Sprintf(":%d", b.Address.Port),
+			}
+		case b.Kind == "supervised" && b.Supervised != nil:
+			cmd := b.Supervised.Cmd
+			if len(cmd) > 34 {
+				cmd = cmd[:31] + "…"
+			}
+			mb = MapBackend{ID: "supervised:" + b.Supervised.Cmd, Kind: "supervised", Name: "supervised", Sub: cmd}
+		case b.Kind == "service" && b.Service != nil:
+			mb = MapBackend{
+				ID:   fmt.Sprintf("svc:%s/%s:%d", b.Service.Namespace, b.Service.Name, b.Service.Port),
+				Kind: "service", Name: b.Service.Namespace + "/" + b.Service.Name, Sub: fmt.Sprintf(":%d", b.Service.Port),
+			}
+		default:
+			return ""
+		}
+		if _, seen := backends[mb.ID]; !seen {
+			backends[mb.ID] = mb
+			backendOrder = append(backendOrder, mb.ID)
+		}
+		return mb.ID
+	}
+
+	byZone := map[string][]MapHost{}
+	for _, al := range allocs.Allocations {
+		h := MapHost{
+			ID: al.ID, Label: al.Label, FQDN: al.FQDN, Kind: string(al.Kind),
+			State: string(al.State), Owner: al.OwnerRef, Project: al.Project,
+			Wildcard: al.Spec.Wildcard || strings.HasPrefix(al.Label, "*."),
+		}
+		for _, rt := range al.Spec.Routes {
+			if id := addBackend(rt.Backend); id != "" {
+				h.Edges = append(h.Edges, MapEdge{Backend: id, Listen: rt.Listen})
+			}
+		}
+		byZone[al.ZoneName] = append(byZone[al.ZoneName], h)
+	}
+
+	out := MapData{}
+	for _, z := range zones.Zones {
+		hosts := byZone[z.Name]
+		sort.Slice(hosts, func(i, j int) bool {
+			if (hosts[i].Label == "@") != (hosts[j].Label == "@") {
+				return hosts[i].Label == "@"
+			}
+			return hosts[i].Label < hosts[j].Label
+		})
+		out.Zones = append(out.Zones, MapZone{Name: z.Name, Profile: z.Profile, Hosts: hosts})
+	}
+	for _, id := range backendOrder {
+		out.Backends = append(out.Backends, backends[id])
+	}
+	return out, nil
+}
+
 // CreateZone adds a zone to the registry.
 func (a *App) CreateZone(name, profile string) error {
 	return a.api().Do(a.ctx, "POST", "/v1/zones", map[string]any{"name": name, "profile": profile}, nil)

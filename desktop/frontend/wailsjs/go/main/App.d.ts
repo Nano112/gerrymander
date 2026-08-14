@@ -12,6 +12,8 @@ export function DaemonDown():Promise<string>;
 
 export function DaemonUp():Promise<string>;
 
+export function GetMap():Promise<main.MapData>;
+
 export function GetPorts():Promise<main.PortsView>;
 
 export function GetProcesses():Promise<Array<Record<string, any>>>;

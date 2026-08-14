@@ -22,6 +22,10 @@ export function DaemonUp() {
   return window['go']['main']['App']['DaemonUp']();
 }
 
+export function GetMap() {
+  return window['go']['main']['App']['GetMap']();
+}
+
 export function GetPorts() {
   return window['go']['main']['App']['GetPorts']();
 }

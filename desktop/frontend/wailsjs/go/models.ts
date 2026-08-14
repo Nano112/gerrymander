@@ -96,6 +96,153 @@ export namespace main {
 	        this.gerry_owner = source["gerry_owner"];
 	    }
 	}
+	export class MapBackend {
+	    id: string;
+	    kind: string;
+	    name: string;
+	    sub: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MapBackend(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.kind = source["kind"];
+	        this.name = source["name"];
+	        this.sub = source["sub"];
+	    }
+	}
+	export class MapEdge {
+	    backend: string;
+	    listen: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new MapEdge(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.backend = source["backend"];
+	        this.listen = source["listen"];
+	    }
+	}
+	export class MapHost {
+	    id: number;
+	    label: string;
+	    fqdn: string;
+	    kind: string;
+	    state: string;
+	    wildcard: boolean;
+	    owner?: string;
+	    project?: string;
+	    edges?: MapEdge[];
+	
+	    static createFrom(source: any = {}) {
+	        return new MapHost(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.label = source["label"];
+	        this.fqdn = source["fqdn"];
+	        this.kind = source["kind"];
+	        this.state = source["state"];
+	        this.wildcard = source["wildcard"];
+	        this.owner = source["owner"];
+	        this.project = source["project"];
+	        this.edges = this.convertValues(source["edges"], MapEdge);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class MapZone {
+	    name: string;
+	    profile: string;
+	    hosts: MapHost[];
+	
+	    static createFrom(source: any = {}) {
+	        return new MapZone(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.profile = source["profile"];
+	        this.hosts = this.convertValues(source["hosts"], MapHost);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class MapData {
+	    zones: MapZone[];
+	    backends: MapBackend[];
+	
+	    static createFrom(source: any = {}) {
+	        return new MapData(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.zones = this.convertValues(source["zones"], MapZone);
+	        this.backends = this.convertValues(source["backends"], MapBackend);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
+	
 	export class PortsView {
 	    grants: core.PortAllocation[];
 	    listeners: Listener[];
