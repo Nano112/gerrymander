@@ -4,3 +4,7 @@ deploy/dev/data/
 *.db
 *.db-wal
 *.db-shm
+
+# stray build artifacts
+desktop/desktop
+/gerry
