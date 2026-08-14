@@ -10,9 +10,11 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -56,6 +58,8 @@ func main() {
 		err = cmdRename(args)
 	case "zone":
 		err = cmdZone(args)
+	case "run":
+		err = cmdRun(args)
 	case "conflicts":
 		err = cmdConflicts(args)
 	case "up":
@@ -91,6 +95,9 @@ client (env: GERRY_API, GERRY_API_KEY):
   claim  --zone Z --label L [--owner O] [--kind tenant|platform] [--hold]
   port   --owner O [--pool dev] [-q]
   zone   add --name Z [--profile dev|prod]
+  run    --owner O [--pool dev] -- CMD [args…]
+         claims O's sticky port, then runs CMD with PORT set and any
+         literal {PORT} in the args replaced (e.g. vite --port {PORT})
   avail  --zone Z --label L
   ls     [--zone Z] [--owner O]
   release --id N
@@ -469,6 +476,46 @@ func findAllocation(ctx context.Context, c *client.Client, zone, label string) (
 		}
 	}
 	return core.Allocation{}, fmt.Errorf("allocation %s in %s not found", label, zone)
+}
+
+// --- run ---
+
+// cmdRun bridges the registry to any dev tool: fetch the owner's sticky
+// port, expose it as $PORT and as a literal {PORT} substitution, exec the
+// command with stdio attached. Ctrl-C reaches the child (same process
+// group); gerry adds no supervision here — it's a port courier.
+func cmdRun(args []string) error {
+	fs := flag.NewFlagSet("run", flag.ExitOnError)
+	owner := fs.String("owner", "", "owner_ref for the sticky port")
+	pool := fs.String("pool", "dev", "port pool")
+	fs.Parse(args)
+	rest := fs.Args()
+	if len(rest) > 0 && rest[0] == "--" {
+		rest = rest[1:]
+	}
+	if *owner == "" || len(rest) == 0 {
+		return fmt.Errorf("usage: gerry run --owner O [--pool dev] -- CMD [args…]")
+	}
+	var pa core.PortAllocation
+	if err := apiClient().Do(context.Background(), "POST", "/v1/ports", map[string]any{"pool": *pool, "owner_ref": *owner}, &pa); err != nil {
+		return err
+	}
+	port := strconv.Itoa(pa.Value)
+	argv := make([]string, len(rest))
+	for i, a := range rest {
+		argv[i] = strings.ReplaceAll(a, "{PORT}", port)
+	}
+	fmt.Fprintf(os.Stderr, "gerry: %s → port %s\n", *owner, port)
+	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	cmd.Env = append(os.Environ(), "PORT="+port, "GERRY_PORT="+port)
+	if err := cmd.Run(); err != nil {
+		if ee, ok := err.(*exec.ExitError); ok {
+			os.Exit(ee.ExitCode())
+		}
+		return err
+	}
+	return nil
 }
 
 // --- mcp ---

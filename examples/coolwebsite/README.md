@@ -40,9 +40,13 @@ port+1 silently breaks the route).
 hostnames means the browser applies CORS; the alternative is one hostname
 with a Vite `server.proxy` for `/api`, which trades away prod parity.
 
-**`dev.sh`** — fetches the sticky ports (`gerry port --owner … -q`) and
-starts `uv run uvicorn` + `npm run dev` with them. Nothing else on the
-machine can collide with those ports; nothing in the repo hardcodes them.
+**`dev.sh`** — two `gerry run` lines. `gerry run --owner X -- CMD` fetches
+X's sticky port, sets `$PORT`, substitutes literal `{PORT}` in the args,
+and execs your tool with stdio attached — gerry is a port courier, never a
+wrapper. The same line works for uvicorn, vite (under bun or node — the
+script prefers `bunx --bun vite` when bun is installed), cargo watch,
+`go run`, rails. Nothing on the machine can collide with those ports;
+nothing in the repo hardcodes them.
 
 ## Verified (2026-08-14, live)
 
