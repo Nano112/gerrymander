@@ -3,6 +3,13 @@
 All notable changes to gerrymander. Versions follow [semver](https://semver.org);
 until 1.0, minor bumps may include breaking changes (called out explicitly).
 
+## v0.7.0 — 2026-08-15
+
+- `gerry tailnet`: guided, self-verifying setup for tailnet-wide dev
+  hostnames — probes machine-subdomain resolution, split DNS, and
+  machine-name ports against the real tailnet, and walks through exact
+  fixes for whatever is missing.
+
 ## v0.6.2 — 2026-08-15
 
 - `gerry update [--check]`: self-update from the latest release (atomic
