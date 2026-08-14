@@ -3,6 +3,13 @@
 All notable changes to gerrymander. Versions follow [semver](https://semver.org);
 until 1.0, minor bumps may include breaking changes (called out explicitly).
 
+## v0.6.1 — 2026-08-15
+
+- gerry status detects the two tailnet traps (TLS-terminating serve handler
+  on :443; advertised zone without a split-DNS route) with exact fixes.
+- GET /v1/dns exposes the DNS config; gerrymander-vite 0.2.0 auto-allows
+  the machine MagicDNS name.
+
 ## v0.6.0 — 2026-08-15
 
 ### Added
