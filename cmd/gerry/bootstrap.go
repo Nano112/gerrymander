@@ -69,6 +69,15 @@ func cmdBootstrap(args []string) error {
 		}
 	}
 
+	// tailnet (optional): when tailscale is present, point at the docs —
+	// dev hostnames can resolve from every device on the tailnet.
+	if _, err := tailscaleIP(); err == nil {
+		fmt.Println()
+		fmt.Println("[+] tailscale detected — your dev hostnames can also resolve tailnet-wide")
+		fmt.Println("    (phone, other machines): https://nano112.github.io/gerrymander/tailscale/")
+		fmt.Println("    `gerry status` checks the tailnet wiring and names any missing piece.")
+	}
+
 	fmt.Println()
 	fmt.Println("done. next:")
 	fmt.Println("  cd your-project && gerry init && gerry dev")

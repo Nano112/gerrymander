@@ -56,7 +56,10 @@ function tailnetNames() {
     try {
       const out = execFileSync(bin, ["status", "--json"], { timeout: 3000, stdio: ["ignore", "pipe", "ignore"] });
       const dns = JSON.parse(out.toString())?.Self?.DNSName;
-      if (dns) return [dns.replace(/\.$/, "")];
+      if (dns) {
+        const name = dns.replace(/\.$/, "");
+        return [name, `.${name}`]; // leading dot = subdomains too (dns-subdomain-resolve)
+      }
     } catch {}
   }
   return [];
