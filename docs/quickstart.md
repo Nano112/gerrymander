@@ -99,3 +99,12 @@ with no published ports — gerry maintains a relay). `down` releases it.
 
 The same registry, with the same semantics, runs in production — see
 [Kubernetes](kubernetes.md).
+
+## The desktop app
+
+The Map view traces every hostname to its backend; Districts manages claims;
+Ports shows every listener cross-marked with registry grants.
+
+![Map view](assets/desktop-map.png)
+
+![Districts view](assets/desktop-districts.png)

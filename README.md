@@ -94,6 +94,10 @@ services:
 
 ## Desktop app
 
+<p align="center">
+  <img src="docs/assets/desktop-map.png" alt="the Map view: zones as plat territories, hostnames traced to their backends" width="720">
+</p>
+
 `desktop/` is a native app (Wails: Go backend + web UI — macOS now, the same
 codebase targets Linux and Windows) for managing the local environment:
 
