@@ -10,5 +10,5 @@ services:
     hostnames: [coolwebsite.test]
     port_pool: dev
   api:
-    hostnames: [api.coolwebsite.test]
+    hostnames: [backend.coolwebsite.test]
     port_pool: dev

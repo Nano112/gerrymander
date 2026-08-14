@@ -15,25 +15,23 @@ export GERRY_API=${GERRY_API:-http://127.0.0.1:4780}
 GERRY=${GERRY_BIN:-gerry}
 command -v "$GERRY" >/dev/null || GERRY="$(cd "$(dirname "$0")/../.." && pwd)/gerry"
 
-# Claim hostnames + routes (idempotent; creates the zone on first run).
-"$GERRY" up -f gerrymander.yaml
+# Idempotent safety net so the api hostname routes even if vite (whose
+# plugin also applies the manifest) isn't started.
+"$GERRY" up -f gerrymander.yaml >/dev/null
 
-# Pick a JS runtime: bun when present, else npm.
-if command -v bun >/dev/null; then
-  JS_INSTALL="bun install"
-  JS_DEV=(bunx --bun vite --host 127.0.0.1 --port '{PORT}' --strictPort)
-else
-  JS_INSTALL="npm install --silent"
-  JS_DEV=(npx vite --host 127.0.0.1 --port '{PORT}' --strictPort)
-fi
+# The frontend needs NO gerry invocation at all: @gerrymander/vite (see
+# frontend/vite.config.ts) claims the hostname + sticky port itself the
+# moment vite boots. Plain `bun run dev` in frontend/ works standalone.
+if command -v bun >/dev/null; then JS_INSTALL="bun install"; JS_DEV="bun run dev";
+else JS_INSTALL="npm install --silent"; JS_DEV="npm run dev"; fi
 
 cleanup() { kill 0 2>/dev/null || true; }
 trap cleanup EXIT INT TERM
 
+# Non-JS tools use `gerry run`, the port courier: sticky $PORT + {PORT} args.
 (cd backend && exec "$GERRY" run --owner coolwebsite/api -- \
   uv run uvicorn main:app --host 127.0.0.1 --port '{PORT}' --reload) &
 
-(cd frontend && [ -d node_modules ] || $JS_INSTALL; \
-  exec "$GERRY" run --owner coolwebsite/frontend -- "${JS_DEV[@]}") &
+(cd frontend && [ -d node_modules ] || $JS_INSTALL; exec $JS_DEV) &
 
 wait

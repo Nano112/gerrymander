@@ -60,6 +60,8 @@ func main() {
 		err = cmdZone(args)
 	case "run":
 		err = cmdRun(args)
+	case "init":
+		err = cmdInit(args)
 	case "conflicts":
 		err = cmdConflicts(args)
 	case "up":
@@ -103,6 +105,7 @@ client (env: GERRY_API, GERRY_API_KEY):
   release --id N
   rename --id N --label NEW       atomic; keeps id/owner/routes/history
   conflicts
+  init   [--name P] [--zone Z]  scaffold a gerrymander.yaml here
   up     [-f gerrymander.yaml]  apply a project manifest
   down   [-f gerrymander.yaml]  release a project manifest
   mcp                           serve MCP over stdio
@@ -369,6 +372,45 @@ func cmdConflicts(args []string) error {
 		return err
 	}
 	printJSON(out)
+	return nil
+}
+
+// --- init ---
+
+func cmdInit(args []string) error {
+	fs := flag.NewFlagSet("init", flag.ExitOnError)
+	name := fs.String("name", "", "project name (default: directory name)")
+	zone := fs.String("zone", "", "zone (default: <name>.test)")
+	fs.Parse(args)
+	if _, err := os.Stat("gerrymander.yaml"); err == nil {
+		return fmt.Errorf("gerrymander.yaml already exists")
+	}
+	n := *name
+	if n == "" {
+		wd, _ := os.Getwd()
+		n = strings.ToLower(filepath.Base(wd))
+	}
+	z := *zone
+	if z == "" {
+		z = n + ".test"
+	}
+	content := fmt.Sprintf(`project: %s
+zone: %s
+services:
+  # With @gerrymander/vite in vite.config, "bun run dev" claims this
+  # hostname and its sticky port automatically. For other tools:
+  #   gerry run --owner %s/frontend -- CMD --port '{PORT}'
+  frontend:
+    hostnames: [%s, "*.%s"]
+    port_pool: dev
+  # api:
+  #   hostnames: [api.%s]
+  #   port_pool: dev
+`, n, z, n, z, z, z)
+	if err := os.WriteFile("gerrymander.yaml", []byte(content), 0o644); err != nil {
+		return err
+	}
+	fmt.Printf("wrote gerrymander.yaml (project %s, zone %s)\nnext: gerry up   # or just start vite with @gerrymander/vite\n", n, z)
 	return nil
 }
 

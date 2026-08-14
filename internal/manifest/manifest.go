@@ -68,6 +68,11 @@ func Load(path string) (*Manifest, error) {
 	if err != nil {
 		return nil, err
 	}
+	return Parse(b, path)
+}
+
+// Parse validates manifest bytes (name is used in error messages only).
+func Parse(b []byte, path string) (*Manifest, error) {
 	var m Manifest
 	if err := yaml.Unmarshal(b, &m); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)

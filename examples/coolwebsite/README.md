@@ -4,8 +4,12 @@ The canonical "two hostnames, one project" dev setup:
 
 | | |
 |---|---|
-| `https://coolwebsite.test` | Vite + React, HMR over `wss://coolwebsite.test` |
-| `https://api.coolwebsite.test` | FastAPI (uvicorn --reload), CORS to the frontend origin |
+| `https://coolwebsite.test` | Vite + React (@gerrymander/vite — `bun run dev` is the whole interface), HMR over `wss://coolwebsite.test` |
+| `https://backend.coolwebsite.test` | FastAPI via `gerry run` (uvicorn --reload), CORS to the frontend origin |
+
+Renaming a hostname = edit `gerrymander.yaml`, restart the dev server: the
+plugin claims the new label and releases the old one (this backend was
+literally renamed from `api.` to `backend.` that way).
 
 ```sh
 ./dev.sh          # claims hostnames + sticky ports, starts both servers

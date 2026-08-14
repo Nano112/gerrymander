@@ -103,6 +103,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /v1/allocations/{id}", s.auth(s.handleRelease))
 	mux.HandleFunc("GET /v1/ports", s.auth(s.handleListPorts))
 	mux.HandleFunc("POST /v1/ports", s.auth(s.handleClaimPort))
+	mux.HandleFunc("POST /v1/manifest/apply", s.auth(s.handleManifestApply))
 	mux.HandleFunc("GET /v1/conflicts", s.auth(s.handleConflicts))
 	mux.HandleFunc("GET /v1/processes", s.auth(s.handleProcesses))
 	mux.HandleFunc("POST /v1/processes/{name}/start", s.auth(s.handleProcessStart))

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 // Different hostname, same trust domain: the browser applies CORS, the
 // backend allows exactly https://coolwebsite.test.
-const API = "https://api.coolwebsite.test";
+const API = "https://backend.coolwebsite.test";
 
 export default function App() {
   const [reply, setReply] = useState<string>("calling the api…");
