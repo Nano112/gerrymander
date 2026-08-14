@@ -18,19 +18,19 @@ gerry token create tenant-acme --owner-ref acme-uuid --zone yourdomain.com
 | claim | forced to the token's `owner_ref`, kind `tenant`, allowed zones only |
 | list | sees only its own allocations |
 | get / rename / renew / release | own allocations only, 403 otherwise |
-| patch | `spec` only — never state or labels |
+| patch | `spec` only, never state or labels |
 | audit | `GET /v1/allocations/{id}/events` for its own allocations |
-| everything else | 403 — zones, ports, manifest apply, processes, conflicts, token management |
+| everything else | 403: zones, ports, manifest apply, processes, conflicts, token management |
 
 Every rule above is pinned by a test
-(`internal/api/scopes_test.go`) — the scope model is part of the public
+(`internal/api/scopes_test.go`). The scope model is part of the public
 contract, not an implementation detail.
 
 ## Mechanics
 
 - Plaintext is `gk_` + 48 hex chars, shown once at creation. Only the
   SHA-256 is stored.
-- `gerry token revoke <name>` disables it immediately and permanently —
+- `gerry token revoke <name>` disables it immediately and permanently;
   mint a new one to restore access.
 - `gerry token ls` shows scope, owner, zones, last use, and revocation
   state (metadata only, never secrets).
@@ -39,8 +39,8 @@ contract, not an implementation detail.
 
 ## Audit trail
 
-Every allocation carries an append-only event history — claimed, renamed,
-renewed, released, by whom, from what state:
+Every allocation carries an append-only event history: claimed, renamed,
+renewed, released, by whom, from what state.
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" \

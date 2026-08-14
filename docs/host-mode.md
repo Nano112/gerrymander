@@ -29,8 +29,8 @@ this is a swap, not a coexistence:
 
 1. **Convert docker-alias backends.** Container-mode manifests reach
    docker-network aliases (`address: my-app:80`); a host daemon cannot dial
-   those directly. Change each to the `docker:` backend form —
-   `docker: { network: <net>, host: my-app, port: 80 }` — and gerry
+   those directly. Change each to the `docker:` backend form,
+   `docker: { network: <net>, host: my-app, port: 80 }`, and gerry
    maintains a socat relay on that network automatically (no compose
    edits, no published ports). Host processes use `address:`/`supervised:`
    as usual.
@@ -38,7 +38,7 @@ this is a swap, not a coexistence:
    `cp deploy/dev/data/ca/* ~/.gerrymander/ca/`
 3. Copy or re-seed the registry: either move the SQLite file from the
    container volume to `~/.gerrymander/gerry.db`, or re-run `gerry up` in
-   each project (sticky ports live in the DB — copy it to keep them).
+   each project (sticky ports live in the DB; copy it to keep them).
 4. Swap: `docker compose down` (deploy/dev) → `gerry service install`.
 5. `gerry status` should go all-green; every hostname serves as before.
 

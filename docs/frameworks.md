@@ -1,18 +1,18 @@
 # Framework recipes
 
-gerry integrates through two primitives — a routed hostname and a sticky
-port — so "integration" is mostly *which of two mechanisms hands your tool
+gerry integrates through two primitives, a routed hostname and a sticky
+port, so "integration" is mostly *which of two mechanisms hands your tool
 its port*:
 
 | Mechanism | For | How |
 |---|---|---|
 | `gerrymander-vite` plugin | Anything vite-based | One plugin line; applies the manifest, sets port/allowedHosts/origin/HMR itself |
-| `gerry run` | Everything else | `gerry run --owner proj/svc -- CMD --port '{PORT}'` — sets `$PORT`, substitutes `{PORT}`, execs |
+| `gerry run` | Everything else | `gerry run --owner proj/svc -- CMD --port '{PORT}'`: sets `$PORT`, substitutes `{PORT}`, execs |
 
 Verification status is labeled honestly: ✅ ran here end-to-end, 🔶 same
 primitives, not yet exercised.
 
-## ✅ Vite (React, Vue, plain) — plugin
+## ✅ Vite (React, Vue, plain): plugin
 
 ```ts
 // vite.config.ts
@@ -22,7 +22,7 @@ export default defineConfig({ plugins: [react(), gerrymander()] });
 `bun run dev` / `npm run dev` is the whole workflow. Verified end-to-end in
 `examples/coolwebsite` (bun runtime, HMR over wss, rename-and-prune).
 
-## ✅ Python (FastAPI / Django / Flask) — gerry dev
+## ✅ Python (FastAPI / Django / Flask): gerry dev
 
 Declare the command in the manifest and the whole workflow is one word:
 
@@ -37,12 +37,12 @@ services:
 gerry dev api    # applies the manifest, grants the sticky port, runs it
 ```
 `gerry run --owner myproj/api -- CMD --port '{PORT}'` remains the ad-hoc
-form. Remember CORS when the frontend lives on a sibling hostname — see the
+form. Remember CORS when the frontend lives on a sibling hostname; see the
 example's `backend/main.py`.
 
-## ✅ Dockerized apps — docker backend (auto-relay)
+## ✅ Dockerized apps: docker backend (auto-relay)
 
-A container that publishes **no ports** can still be a backend: gerry keeps
+A container that publishes no ports can still be a backend: gerry keeps
 a tiny socat relay on its network, publishing a sticky loopback port on
 demand. Zero compose edits.
 
@@ -57,19 +57,19 @@ proxy, relay auto-created on first request (`docker ps` shows it as
 `gerry-relay-*`, labeled `app.gerrymander.relay`). Needs the docker CLI on
 the daemon's host; first use pulls `alpine/socat`.
 
-## ✅ Bun runtime — either
+## ✅ Bun runtime: either
 
 `bunx --bun vite` works under the plugin (verified). A native server:
 
 ```ts
-// Bun.serve reads $PORT by convention — gerry run provides it.
+// Bun.serve reads $PORT by convention; gerry run provides it.
 Bun.serve({ port: Number(process.env.PORT), fetch: handler });
 ```
 ```sh
 gerry run --owner myproj/api -- bun run server.ts
 ```
 
-## 🔶 SvelteKit / Astro / Nuxt — plugin (vite-based)
+## 🔶 SvelteKit / Astro / Nuxt: plugin (vite-based)
 
 All three embed vite, so `gerrymander-vite` slots into their vite plugin
 arrays:
@@ -84,14 +84,14 @@ Caveat to watch: each framework layers its own `server` defaults; if one
 overrides the port after plugins run, fall back to `gerry run` + framework
 port flag.
 
-## 🔶 Next.js — gerry run
+## 🔶 Next.js: gerry run
 
 Next isn't vite; the courier does it:
 
 ```sh
 gerry run --owner myproj/web -- next dev -p '{PORT}'
 ```
-Next 15+ blocks cross-origin dev assets like Vite does — add your hostname:
+Next 15+ blocks cross-origin dev assets like Vite does. Add your hostname:
 
 ```js
 // next.config.js

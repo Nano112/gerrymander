@@ -1,4 +1,4 @@
-# Coexistence — what gerry touches, what it never touches
+# Coexistence: what gerry touches, what it never touches
 
 gerry's rule for living on your machine: **every takeover is detected
 before it happens, and every removal requires gerry's own ownership mark.**
@@ -17,21 +17,21 @@ before it happens, and every removal requires gerry's own ownership mark.**
 
 **Why uninstall cannot break DNS:** the only DNS artifact gerry ever
 creates is a marker-tagged per-TLD resolver file. Removing it restores the
-exact pre-gerry path — your upstream resolver answers, and dev TLDs simply
+exact pre-gerry path: your upstream resolver answers, and dev TLDs simply
 NXDOMAIN. Resolver files without the marker (dnsmasq's, Herd's, yours) are
 reported and left alone, always. Same logic for TLS: a CA gerry merely
 *borrowed* (say, Caddy's already-trusted root) has a different CN and is
 never deleted.
 
-## Interference matrix — and what gerry does about each
+## Interference matrix, and what gerry does about each
 
 **Ports 80/443 taken** (Herd, Valet, Caddy, nginx, another proxy, a docker
-container): the proxy **degrades instead of dying** — the registry API
+container): the proxy degrades instead of dying. The registry API
 stays up, the log and `gerry status` name the process holding the port
 (via lsof) with the choice: stop it or move `proxy.tls` in the config.
 
 **Port 4780 taken**: if the holder answers like a gerry daemon, the error
-says so explicitly ("container mode running? stop it first") — the
+says so explicitly ("container mode running? stop it first"); the
 two-daemons foot-gun is caught at startup, not debugged at midnight.
 
 **Existing dev-DNS (dnsmasq, Herd, Valet)**: `gerry setup` probes
@@ -43,7 +43,7 @@ per-TLD resolver files coexist with VPN DNS. On Linux gerry prints manual
 routing instructions rather than guessing at resolved's config.
 
 **Intercepting proxies (Proxyman, Charles, corporate)**: `gerry status`
-detects an active system/env HTTP proxy and warns — the signature is
+detects an active system/env HTTP proxy and warns. The signature is
 "works in curl, dies in the browser", and the stale-socket variant
 survives daemon restarts (learned the hard way).
 
@@ -53,7 +53,7 @@ an explicit `port 5353` line.
 
 **OS ephemeral port range** (macOS hands out 49152–65535): sticky grants
 are bind-tested before issue and marked `occupied-foreign` when something
-unmanaged squats later — reported, never silently reassigned.
+unmanaged squats later: reported, never silently reassigned.
 
 **Preloaded-HSTS TLDs**: `.dev`, `.app` and friends are real, HSTS-preloaded
 gTLDs; browsers refuse local CAs for them. Use `.test` (RFC 6761 reserved).

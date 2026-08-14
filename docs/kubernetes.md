@@ -1,6 +1,6 @@
 # Kubernetes
 
-In production, gerry is the **authority on who owns which hostname** — the
+In production, gerry is the authority on who owns which hostname: the
 missing referee between your app's tenant table and your ingress routes.
 It layers three capabilities; each is independently optional.
 
@@ -31,7 +31,7 @@ registry:
   traffic)
 
 Conflicts appear at `/v1/conflicts`, as `gerry_conflicts` metrics, and as
-Prometheus alerts. **The observer never mutates anything it observes.**
+Prometheus alerts. The observer never mutates anything it observes.
 
 ## 2. Actuator (write-side, off by default)
 
@@ -47,7 +47,7 @@ actuator:
   # gateway: { name: edge, namespace: infra }   # gateway-api
 ```
 
-The safety contract — enforced by construction and proven by a k3d e2e in
+The safety contract, enforced by construction and proven by a k3d e2e in
 CI on every change:
 
 1. it lists and mutates **only** resources labeled
@@ -72,9 +72,9 @@ spec:
   kind: platform
 ```
 
-Enable `crd_ingest` and CRs feed the registry. **The CR is input; the
-database is truth**: a reservation that loses the race for a taken label
-logs the conflict and stays unfulfilled — it never steals the name. Deleting
+Enable `crd_ingest` and CRs feed the registry. The CR is input; the
+database is truth. A reservation that loses the race for a taken label
+logs the conflict and stays unfulfilled; it never steals the name. Deleting
 the CR releases the allocation (only CRD-owned ones).
 
 ## Wiring your app

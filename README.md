@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/license-MIT-e8dcbb" alt="MIT">
 </p>
 
-**A hostname and port control plane** — one authority for *who owns which
+**A hostname and port control plane.** One authority for *who owns which
 hostname* in a wildcard zone, and *which process owns which port* on a dev
 machine. The same binary, model, and CLI run on a laptop and in production.
 
@@ -30,41 +30,42 @@ claiming `grafana`; nothing stops an engineer shipping a route that shadows
 tenant `acme`. Meanwhile on every dev machine, `5173`, `8000` and `8080` are
 allocated by convention and collide weekly.
 
-Both are the same operation: **claim a scarce name from a pool, exclusively,
-and make traffic arrive.**
+Both are the same operation: claim a scarce name from a pool, exclusively,
+and make traffic arrive.
 
 ## How it works
 
-The entire correctness guarantee is two unique indexes:
+The entire correctness guarantee is two unique indexes.
 
-- `UNIQUE (zone_id, label)` — tenant claims, platform reservations, and
-  blocklist entries all live in **one table**, therefore one namespace. A
+- `UNIQUE (zone_id, label)`: tenant claims, platform reservations, and
+  blocklist entries all live in one table, therefore one namespace. A
   tenant can't take `grafana` because `grafana` is already a row.
-- `UNIQUE (pool_id, value)` + `UNIQUE (pool_id, owner_ref)` — ports are
-  granted once, and **sticky**: the same owner always gets the same port, so
+- `UNIQUE (pool_id, value)` + `UNIQUE (pool_id, owner_ref)`: ports are
+  granted once, and sticky. The same owner always gets the same port, so
   it's safe to write into config files.
 
 Around that core:
 
-- **REST API** with availability checks that return *why not* + suggestions,
-  two-phase holds (reserve → provision → commit), idempotency keys.
-- **Embedded dev proxy**: per-SNI leaf certs from a local CA (bring your own —
-  e.g. Caddy's, so existing trust survives), multi-port TLS listeners,
+- **REST API** with availability checks that return *why not* plus
+  suggestions, two-phase holds (reserve, provision, commit), idempotency
+  keys.
+- **Embedded dev proxy**: per-SNI leaf certs from a local CA (bring your
+  own, e.g. Caddy's, so existing trust survives), multi-port TLS listeners,
   hot-reloading route table. Replaces a hand-maintained Caddyfile with a
   `gerrymander.yaml` per repo (`gerry up`).
 - **Supervised backends**: start a dev server on first request, health-gate,
   sleep it when idle, park it on crash loops. Contained behind a backend
-  interface — never a core concern.
+  interface, never a core concern.
 - **Kubernetes observer**: watches Traefik `IngressRoute`s and `Ingress`es,
-  auto-registers platform hostnames so the reserved list can never drift, and
-  reports conflicts — **never auto-resolves them**.
+  auto-registers platform hostnames so the reserved list can never drift,
+  and reports conflicts without ever auto-resolving them.
 - **Traefik shadow check**: verifies the tenant catch-all's priority stays
   strictly below every bare-`Host()` route. Ties silently hijack hostnames;
   no other tool catches this.
 - **MCP server** (`gerry mcp`): coding agents claim ports instead of
   hardcoding 5173 for the fourth time.
-- **Prometheus metrics** + Laravel client package (`Rule::hostnameAvailable`,
-  fails closed with an embedded blocklist).
+- **Prometheus metrics** and a Laravel client package
+  (`Rule::hostnameAvailable`, fails closed with an embedded blocklist).
 
 ## Quickstart (dev machine)
 
@@ -107,17 +108,17 @@ services:
   <img src="docs/assets/desktop-map.png" alt="the Map view: zones as plat territories, hostnames traced to their backends" width="720">
 </p>
 
-`desktop/` is a native app (Wails: Go backend + web UI — macOS now, the same
+`desktop/` is a native app (Wails: Go backend + web UI; macOS now, the same
 codebase targets Linux and Windows) for managing the local environment:
 
-- **Districts** — the zone tree: every hostname, its routes, owner, and state,
-  with claim (live availability check + suggestions) and release.
-- **Ports** — every listening TCP socket on the machine (lsof), cross-marked
-  with registry grants, with graceful kill (SIGTERM → 2s → SIGKILL; ⌥-click
-  for immediate SIGKILL) — the port-killer workflow, registry-aware.
-- **Processes** — supervised services: start, stop, live log tail.
+- **Districts**: the zone tree. Every hostname, its routes, owner, and
+  state, with claim (live availability check plus suggestions) and release.
+- **Ports**: every listening TCP socket on the machine (lsof), cross-marked
+  with registry grants, with graceful kill (SIGTERM, then SIGKILL after 2s;
+  ⌥-click for immediate SIGKILL). The port-killer workflow, registry-aware.
+- **Processes**: supervised services. Start, stop, live log tail.
 - Header controls start/stop the local daemon (docker compose) and point the
-  app at any gerry instance (local or remote) in Settings.
+  app at any gerry instance, local or remote, in Settings.
 
 ```sh
 cd desktop && wails build   # produces build/bin/Gerrymander.app
@@ -132,23 +133,29 @@ everything the cluster actually routes; `/v1/conflicts` and the
 
 ## Docs
 
-- [`docs/frameworks.md`](docs/frameworks.md) — recipes: Vite plugin, Next,
-  SvelteKit/Astro, FastAPI, Bun.serve, Rails (labeled verified/unverified)
-- [`docs/host-mode.md`](docs/host-mode.md) — `gerry service install` and the
-  container→host migration
-- [`examples/coolwebsite`](examples/coolwebsite) — the canonical two-hostname
-  project, end-to-end
-- `gerry status` — the built-in doctor when anything misbehaves
+Full documentation lives at
+[nano112.github.io/gerrymander](https://nano112.github.io/gerrymander/).
+
+- [`docs/frameworks.md`](docs/frameworks.md): recipes for the Vite plugin,
+  Next, SvelteKit/Astro, FastAPI, Bun.serve, Rails (labeled
+  verified/unverified)
+- [`docs/host-mode.md`](docs/host-mode.md): `gerry service install` and the
+  container-to-host migration
+- [`examples/coolwebsite`](examples/coolwebsite): the canonical
+  two-hostname project, end to end
+- `gerry status`: the built-in doctor when anything misbehaves
 
 ## Status
 
-v0.3 — actively dogfooded since day one on the author's dev machine
+v0.5 — actively dogfooded since day one on the author's dev machine
 (replacing a hand-maintained Caddy dev proxy) and a production k3s cluster
-(registry + drift observer for a multi-tenant wildcard zone). Race
-invariants tested under `-race`.
+(registry, drift observer, and route actuator for a multi-tenant wildcard
+zone). Race invariants tested under `-race`; the actuator's safety contract
+is proven by a k3d e2e in CI.
 
-Deferred by design: `dns/cloudflare`, `ingress/caddy`, `dns/dnsmasq`
-writers, `HostnameReservation` CRD, admin UI, Linux/Windows desktop builds.
+Experimental or beta, stated plainly: the Cloudflare DNS writer is
+mock-tested but has not run against a live zone, and the Windows binaries
+are cross-compiled but not yet exercised on a real Windows machine.
 
 ## License
 
