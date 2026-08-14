@@ -3,6 +3,13 @@
 All notable changes to gerrymander. Versions follow [semver](https://semver.org);
 until 1.0, minor bumps may include breaking changes (called out explicitly).
 
+## v0.5.2 — 2026-08-15
+
+- `gerry init` detects the project's dev command: a package.json with a
+  `dev` script scaffolds a runnable `dev:` line, runner picked from the
+  lockfile present (bun/pnpm/yarn/npm). `gerry init && gerry dev` works
+  without hand-editing the manifest.
+
 ## v0.5.1 — 2026-08-14
 
 - `gerry bootstrap`: the whole first run as one idempotent command — service
