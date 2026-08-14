@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Nano112/gerrymander/internal/actuate"
 	"github.com/Nano112/gerrymander/internal/api"
 	"github.com/Nano112/gerrymander/internal/core"
 	"github.com/Nano112/gerrymander/internal/store"
@@ -124,8 +125,9 @@ func (o *Observer) get(ctx context.Context, path string, into any) error {
 type ingressRouteList struct {
 	Items []struct {
 		Metadata struct {
-			Namespace string `json:"namespace"`
-			Name      string `json:"name"`
+			Namespace string            `json:"namespace"`
+			Name      string            `json:"name"`
+			Labels    map[string]string `json:"labels"`
 		} `json:"metadata"`
 		Spec struct {
 			Routes []struct {
@@ -166,7 +168,8 @@ func (o *Observer) FetchRoutes(ctx context.Context) ([]ObservedRoute, error) {
 			or := ObservedRoute{
 				Namespace: item.Metadata.Namespace, Name: item.Metadata.Name,
 				Kind: "IngressRoute", Match: r.Match, Priority: r.Priority,
-				Hosts: ParseMatch(r.Match),
+				Hosts:   ParseMatch(r.Match),
+				Managed: item.Metadata.Labels[actuate.ManagedLabel] == "true",
 			}
 			if len(r.Services) > 0 {
 				or.Service = item.Metadata.Namespace + "/" + r.Services[0].Name
@@ -216,6 +219,9 @@ func (o *Observer) Reconcile(ctx context.Context, routes []ObservedRoute) error 
 		}
 		seenLabels := map[string]string{} // label → ns/name
 		for _, r := range routes {
+			if r.Managed {
+				continue // gerry's own actuator output — never classify it
+			}
 			for _, h := range r.Hosts {
 				var label string
 				var ok bool

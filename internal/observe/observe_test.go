@@ -159,3 +159,33 @@ func TestReconcileImportsAndConflicts(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestManagedRoutesAreNeverClassified(t *testing.T) {
+	st, err := store.Open("sqlite:" + filepath.Join(t.TempDir(), "managed.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx := context.Background()
+	z, _ := st.EnsureZone(ctx, core.Zone{Name: "olsyn.com"})
+	st.CreateAllocation(ctx, core.Allocation{
+		ZoneID: z.ID, Label: "gv", FQDN: "gv.olsyn.com", Kind: core.KindTenant,
+		Source: core.SourceSeed, State: core.StateActive, OwnerRef: "tenant-uuid-gv",
+	})
+
+	obs := &Observer{Store: st, Zones: []string{"olsyn.com"}}
+	routes := []ObservedRoute{{
+		Namespace: "olsyn-production", Name: "gerry-olsyn-com-gv", Kind: "IngressRoute",
+		Match: "Host(`gv.olsyn.com`)", Priority: 10,
+		Hosts:   ParseMatch("Host(`gv.olsyn.com`)"),
+		Managed: true, // the actuator materialized this tenant's allocation
+	}}
+	if err := obs.Reconcile(ctx, routes); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range obs.Conflicts() {
+		if c["label"] == "gv" {
+			t.Fatalf("actuator's own route classified as conflict: %+v", c)
+		}
+	}
+}

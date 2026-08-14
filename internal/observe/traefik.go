@@ -55,6 +55,11 @@ type ObservedRoute struct {
 	Priority  int // explicit; 0 = default
 	Hosts     []HostPattern
 	Service   string // "ns/name:port" of the first backend, informational
+	// Managed marks routes the gerry actuator wrote itself
+	// (app.gerrymander/managed=true). The observer must not classify its
+	// own output: a managed route for a tenant allocation is the
+	// materialization of that allocation, not a squatter.
+	Managed bool
 }
 
 // EffectivePriority mirrors Traefik: explicit priority, else rule length.
