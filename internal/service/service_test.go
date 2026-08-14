@@ -75,6 +75,26 @@ func TestAvailabilityReasons(t *testing.T) {
 	}
 }
 
+// Seed backfills grandfather existing tenants past the blocklist; the same
+// label stays blocked for new signups (source=api).
+func TestSeedBypassesPolicyButAPIDoesNot(t *testing.T) {
+	a, _ := testSvc(t)
+	ctx := context.Background()
+	if _, err := a.Claim(ctx, ClaimRequest{Zone: "olsyn.com", Label: "test", Source: core.SourceSeed, OwnerRef: "legacy-tenant"}); err != nil {
+		t.Fatalf("seed of blocklisted label should succeed: %v", err)
+	}
+	_, err := a.Claim(ctx, ClaimRequest{Zone: "olsyn.com", Label: "staging"})
+	var rej *ErrClaimRejected
+	if !errors.As(err, &rej) || rej.Reason != "blocked" {
+		t.Fatalf("api claim of blocklisted label must stay blocked: %v", err)
+	}
+	// And uniqueness still applies to seeds.
+	_, err = a.Claim(ctx, ClaimRequest{Zone: "olsyn.com", Label: "test", Source: core.SourceSeed})
+	if !errors.As(err, &rej) || rej.Reason != "taken" {
+		t.Fatalf("duplicate seed: want taken, got %v", err)
+	}
+}
+
 func TestClaimRejectionCarriesReason(t *testing.T) {
 	a, _ := testSvc(t)
 	ctx := context.Background()

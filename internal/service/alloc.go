@@ -184,13 +184,20 @@ func (a *Alloc) claimHostname(ctx context.Context, req ClaimRequest) (*core.Allo
 	if err != nil {
 		return nil, &ErrClaimRejected{Reason: "invalid", Message: err.Error()}
 	}
-	if res := a.policyFor(zone).Check(label, kind); res.Reason != "" {
-		return nil, &ErrClaimRejected{Reason: res.Reason, Message: res.Message, Suggestions: a.filterAvailable(ctx, zone, core.Suggest(label))}
+	// Policy gates the signup path. Trusted sources (seed backfills of
+	// pre-existing tenants, manifests, GitOps, the observer) bypass it —
+	// grandfathering an existing tenant named "test" must not fail on the
+	// blocklist that exists to stop NEW signups taking "test".
+	source := orSource(req.Source, core.SourceAPI)
+	if source == core.SourceAPI {
+		if res := a.policyFor(zone).Check(label, kind); res.Reason != "" {
+			return nil, &ErrClaimRejected{Reason: res.Reason, Message: res.Message, Suggestions: a.filterAvailable(ctx, zone, core.Suggest(label))}
+		}
 	}
 	alloc := core.Allocation{
 		ZoneID: zone.ID, ZoneName: zone.Name, Project: req.Project,
 		Label: label, FQDN: core.FQDN(label, zone.Name),
-		Kind: kind, Source: orSource(req.Source, core.SourceAPI),
+		Kind: kind, Source: source,
 		OwnerRef: req.OwnerRef, OwnerKind: req.OwnerKind,
 		Spec: req.Spec, Labels: req.Labels,
 		State: core.StateActive,

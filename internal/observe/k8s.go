@@ -252,7 +252,7 @@ func (o *Observer) Reconcile(ctx context.Context, routes []ObservedRoute) error 
 				case errors.Is(err, store.ErrNotFound):
 					if o.AutoRegister {
 						_, cerr := o.Store.CreateAllocation(ctx, core.Allocation{
-							ZoneID: zone.ID, Label: label, FQDN: core.FQDN(strings.TrimPrefix(label, "*."), zoneName),
+							ZoneID: zone.ID, Label: label, FQDN: core.FQDN(label, zoneName),
 							Kind: core.KindPlatform, Source: core.SourceObserved, State: core.StateActive,
 							OwnerRef: r.Namespace + "/" + r.Name, OwnerKind: r.Kind,
 							Labels: map[string]string{"observed-service": r.Service},
