@@ -3,6 +3,13 @@
 All notable changes to gerrymander. Versions follow [semver](https://semver.org);
 until 1.0, minor bumps may include breaking changes (called out explicitly).
 
+## v0.7.3 — 2026-08-15
+
+- /v1/ca serves a named certificate (gerrymander-root-ca.crt, x509
+  content-type) so phones offer the install flow; /v1/ca.crt alias.
+- `gerry tailnet` probes API reachability on the tailnet address before
+  printing trust URLs; prints the publish/listen fix when unreachable.
+
 ## v0.7.2 — 2026-08-15
 
 - `gerry tailnet` recognizes the server-side rejection of the
