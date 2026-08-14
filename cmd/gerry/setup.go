@@ -77,6 +77,12 @@ func cmdSetup(args []string) error {
 				}
 			}
 			fmt.Println("    (enable dns in the daemon config: dns: { enabled: true, zones: [" + t + "] })")
+		case "windows":
+			// BETA: NRPT routes a whole namespace to a nameserver, but only
+			// on port 53 — so gerry's DNS must own :53 for this to work.
+			fmt.Printf("  *.%s does not resolve — on Windows (beta) route the namespace via NRPT (admin PowerShell):\n", t)
+			fmt.Println("    Add-DnsClientNrptRule -Namespace \"." + t + "\" -NameServers 127.0.0.1")
+			fmt.Println("    and run gerry's DNS on :53 (dns: { enabled: true, listen: \"127.0.0.1:53\", zones: [" + t + "] })")
 		default:
 			fmt.Printf("  *.%s does not resolve — on Linux point your resolver at gerry's DNS manually:\n", t)
 			fmt.Println("    dnsmasq: address=/." + t + "/127.0.0.1  (or resolved per-link domain routing)")

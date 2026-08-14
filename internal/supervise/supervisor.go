@@ -11,10 +11,10 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/Nano112/gerrymander/internal/core"
@@ -162,19 +162,21 @@ func (m *Manager) start(ctx context.Context, alloc core.Allocation, p *process) 
 		port = pa.Value
 	}
 
-	shell := os.Getenv("SHELL")
-	if shell == "" {
+	shell, shellFlag := os.Getenv("SHELL"), "-c"
+	if runtime.GOOS == "windows" {
+		shell, shellFlag = "cmd", "/C"
+	} else if shell == "" {
 		shell = "/bin/sh"
 	}
 	cmdline := strings.ReplaceAll(p.spec.Cmd, "${PORT}", strconv.Itoa(port))
-	cmd := exec.Command(shell, "-c", cmdline)
+	cmd := exec.Command(shell, shellFlag, cmdline)
 	cmd.Dir = p.spec.Dir
 	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env, "PORT="+strconv.Itoa(port))
 	for k, v := range p.spec.Env {
 		cmd.Env = append(cmd.Env, k+"="+strings.ReplaceAll(v, "${PORT}", strconv.Itoa(port)))
 	}
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // kill the whole group
+	setProcessGroup(cmd) // kill the whole group later
 	cmd.Stdout = p.logs
 	cmd.Stderr = p.logs
 	if err := cmd.Start(); err != nil {
@@ -256,7 +258,7 @@ func (m *Manager) healthGate(p *process) {
 	cmd := p.cmd
 	p.mu.Unlock()
 	if cmd != nil && cmd.Process != nil {
-		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		killGroup(cmd.Process.Pid)
 	}
 	close(ready)
 }
@@ -325,7 +327,7 @@ func (m *Manager) sweep() {
 func (p *process) stopLocked() {
 	if p.cmd != nil && p.cmd.Process != nil {
 		p.state = stateStopped // set before kill so Wait() doesn't count it as a crash
-		syscall.Kill(-p.cmd.Process.Pid, syscall.SIGTERM)
+		terminateGroup(p.cmd.Process.Pid)
 	} else {
 		p.state = stateStopped
 	}

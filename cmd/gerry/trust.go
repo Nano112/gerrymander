@@ -53,8 +53,11 @@ func cmdTrust(args []string) error {
 		} else {
 			return fmt.Errorf("no known trust tool (update-ca-certificates / trust); install the CA at %s manually", tmp)
 		}
+	case "windows":
+		// BETA: certutil ships with Windows; -user avoids needing admin.
+		cmds = [][]string{{"certutil", "-user", "-addstore", "Root", tmp}}
 	default:
-		return fmt.Errorf("gerry trust supports macOS and Linux; install %s into your trust store manually", tmp)
+		return fmt.Errorf("gerry trust supports macOS, Linux and Windows (beta); install %s into your trust store manually", tmp)
 	}
 
 	for _, c := range cmds {

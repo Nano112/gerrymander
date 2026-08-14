@@ -16,6 +16,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"sort"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -682,8 +683,10 @@ func cmdDev(args []string) error {
 		err := c.Do(ctx, "POST", "/v1/ports", map[string]any{"pool": "dev", "owner_ref": m.Project + "/" + name}, &pa)
 		return pa.Value, err
 	}
-	shell := os.Getenv("SHELL")
-	if shell == "" {
+	shell, shellFlag := os.Getenv("SHELL"), "-c"
+	if runtime.GOOS == "windows" {
+		shell, shellFlag = "cmd", "/C"
+	} else if shell == "" {
 		shell = "/bin/sh"
 	}
 
@@ -744,10 +747,9 @@ func cmdDev(args []string) error {
 		if hosts := applied.Services[name].Hostnames; len(hosts) > 0 {
 			fmt.Fprintf(os.Stderr, "%sgerry: https://%s → :%d\n", prefix, hosts[0], port)
 		}
-		cmd := exec.CommandContext(runCtx, shell, "-c", strings.ReplaceAll(m.Services[name].Dev, "{PORT}", strconv.Itoa(port)))
+		cmd := exec.CommandContext(runCtx, shell, shellFlag, strings.ReplaceAll(m.Services[name].Dev, "{PORT}", strconv.Itoa(port)))
 		cmd.Env = append(os.Environ(), "PORT="+strconv.Itoa(port), "GERRY_PORT="+strconv.Itoa(port))
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-		cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM) }
+		groupCommand(cmd)
 		stdout, _ := cmd.StdoutPipe()
 		stderr, _ := cmd.StderrPipe()
 		if err := cmd.Start(); err != nil {

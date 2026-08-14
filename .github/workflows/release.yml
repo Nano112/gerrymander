@@ -15,6 +15,10 @@ jobs:
           - { runner: macos-latest, goos: darwin, goarch: amd64, cgo: "1" }
           - { runner: ubuntu-latest, goos: linux, goarch: amd64, cgo: "0" }
           - { runner: ubuntu-latest, goos: linux, goarch: arm64, cgo: "0" }
+          # Windows builds are BETA: cross-compiled, not yet exercised on a
+          # real Windows machine. dev/proxy work; setup/service are stubs.
+          - { runner: ubuntu-latest, goos: windows, goarch: amd64, cgo: "0" }
+          - { runner: ubuntu-latest, goos: windows, goarch: arm64, cgo: "0" }
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -28,11 +32,15 @@ jobs:
           CGO_ENABLED: ${{ matrix.cgo }}
         run: |
           VERSION=${GITHUB_REF_NAME#v}
-          go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" \
-            -o gerry_${{ matrix.goos }}_${{ matrix.goarch }} ./cmd/gerry
-          tar czf gerry_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz \
-            gerry_${{ matrix.goos }}_${{ matrix.goarch }}
+          BIN=gerry
+          [ "${{ matrix.goos }}" = "windows" ] && BIN=gerry.exe
+          go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o $BIN ./cmd/gerry
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            zip gerry_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}.zip $BIN
+          else
+            tar czf gerry_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz $BIN
+          fi
       - name: attach to release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" gerry_*.tar.gz --clobber
+        run: gh release upload "$GITHUB_REF_NAME" gerry_*.tar.gz gerry_*.zip --clobber || gh release upload "$GITHUB_REF_NAME" gerry_*.tar.gz --clobber || gh release upload "$GITHUB_REF_NAME" gerry_*.zip --clobber
