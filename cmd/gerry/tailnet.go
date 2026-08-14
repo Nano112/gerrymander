@@ -47,8 +47,12 @@ func cmdTailnet(args []string) error {
 		fmt.Println(`               {"target": ["*"], "attr": ["dns-subdomain-resolve"]},`)
 		fmt.Println(`           ],`)
 		fmt.Println("      3. save, wait a few seconds, run `gerry tailnet` again — the ✗")
-		fmt.Println("         flips to ✓ when it lands. (If it never does, your coordination")
-		fmt.Println("         server does not pass this capability through yet; use route 2/3.)")
+		fmt.Println("         flips to ✓ when it lands.")
+		fmt.Println("    If the editor rejects the save with:")
+		fmt.Println("        `tailnet is not permitted to use the \"dns-subdomain-resolve\" node attribute`")
+		fmt.Println("    the rollout has not reached your tailnet yet — Tailscale allowlists this")
+		fmt.Println("    server-side (and clients want ~v1.96+). Nothing on your machine fixes it:")
+		fmt.Println("    wait, or ask Tailscale support to enable it. Routes 2 and 3 work today.")
 	}
 
 	// ---- route 2: split DNS for dev zones ---------------------------
