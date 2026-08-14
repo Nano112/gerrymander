@@ -48,6 +48,13 @@ func cmdUpdate(args []string) error {
 	// the package manager. Let brew do it.
 	if strings.Contains(self, "/Cellar/") || strings.Contains(self, "/homebrew/") {
 		fmt.Println("installed via Homebrew — updating through brew:")
+		// brew only refreshes third-party taps on `brew update`, which it
+		// skips when it ran recently — so an upgrade right after a release
+		// sees the stale formula and says "already installed". Pull the
+		// tap directly first; it's one tiny git repo.
+		if repo, err := exec.Command("brew", "--repository", "nano112/tap").Output(); err == nil {
+			exec.Command("git", "-C", strings.TrimSpace(string(repo)), "pull", "--quiet").Run()
+		}
 		cmd := exec.Command("brew", "upgrade", "nano112/tap/gerry")
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 		return cmd.Run()
