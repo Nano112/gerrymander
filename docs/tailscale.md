@@ -5,6 +5,17 @@ laptop, the work machine, your phone. One config line makes gerry's DNS
 answer with this machine's tailnet address instead of loopback; split DNS
 on the tailnet routes the dev TLD here.
 
+## The guided way
+
+```sh
+gerry tailnet
+```
+
+probes the three routes below against your actual tailnet — which already
+work, which don't — and prints the exact steps for whatever is missing.
+Re-running it verifies each change as you make it. The rest of this page
+is the same material in prose.
+
 ## On the machine running gerry
 
 ```yaml

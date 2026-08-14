@@ -105,6 +105,8 @@ func main() {
 		err = cmdUninstall(args)
 	case "completion":
 		err = cmdCompletion(args)
+	case "tailnet":
+		err = cmdTailnet(args)
 	case "update":
 		err = cmdUpdate(args)
 	case "version":
@@ -150,6 +152,8 @@ client (env: GERRY_API, GERRY_API_KEY):
   conflicts
   init   [--name P] [--zone Z]  scaffold a gerrymander.yaml here
   status                        doctor: daemon/DNS/proxy/trust checks + fixes
+  tailnet                       guided setup: dev hostnames on your tailscale
+                                (probes what works, walks through what doesn't)
   service install|status|…      run the daemon as a launchd agent (host mode)
   up     [-f gerrymander.yaml]  apply a project manifest
   down   [-f gerrymander.yaml]  release a project manifest

@@ -22,6 +22,8 @@ func tailscaleChecks(rep *statusReport) {
 		return // no tailscale on this machine — nothing to check
 	}
 
+	rep.fix("guided tailnet setup: gerry tailnet")
+
 	// --- serve termination trap -------------------------------------
 	if out, err := exec.Command(bin, "serve", "status").Output(); err == nil {
 		if serveTerminates443(string(out)) {
