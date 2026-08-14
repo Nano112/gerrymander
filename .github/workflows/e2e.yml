@@ -1,0 +1,31 @@
+name: e2e
+on:
+  push:
+    branches: [main]
+    paths:
+      - "internal/actuate/**"
+      - "internal/k8slite/**"
+      - "internal/store/**"
+      - "internal/service/**"
+      - "cmd/**"
+      - "hack/e2e-actuator.sh"
+      - ".github/workflows/e2e.yml"
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  actuator:
+    # The actuator's whole value is its safety contract: only touch
+    # own-labeled routes, delete on release, repair drift. This proves it
+    # against a real API server for both providers on every change.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install k3d
+        run: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+      - name: Actuator safety e2e (traefik-crd + gateway-api)
+        run: ./hack/e2e-actuator.sh all
