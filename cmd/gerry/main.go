@@ -867,7 +867,7 @@ func cmdDev(args []string) error {
 func cmdInit(args []string) error {
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
 	name := fs.String("name", "", "project name (default: directory name)")
-	zone := fs.String("zone", "", "zone (default: <name>.test)")
+	zone := fs.String("zone", "", "zone (default: <name>.<GERRY_TLD or test>)")
 	fs.Parse(args)
 	if _, err := os.Stat("gerrymander.yaml"); err == nil {
 		return fmt.Errorf("gerrymander.yaml already exists")
@@ -879,7 +879,11 @@ func cmdInit(args []string) error {
 	}
 	z := *zone
 	if z == "" {
-		z = n + ".test"
+		tld := os.Getenv("GERRY_TLD")
+		if tld == "" {
+			tld = "test"
+		}
+		z = n + "." + strings.Trim(tld, ".")
 	}
 	devLine, detected := detectDevCommand()
 	dev := "    # dev: npm run dev              # then `gerry dev` runs it on the sticky port\n"

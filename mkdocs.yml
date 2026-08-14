@@ -28,6 +28,7 @@ nav:
       - Host mode: host-mode.md
       - Coexistence: coexistence.md
       - Tailscale: tailscale.md
+      - Multi-machine & TLDs: multi-machine.md
       - nginx & NPM: reverse-proxies.md
   - Production:
       - Kubernetes: kubernetes.md
