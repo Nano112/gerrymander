@@ -3,6 +3,11 @@
 All notable changes to gerrymander. Versions follow [semver](https://semver.org);
 until 1.0, minor bumps may include breaking changes (called out explicitly).
 
+## v0.7.1 — 2026-08-15
+
+- `gerry update` (brew path) pulls the tap before upgrading, fixing
+  "already installed" when updating right after a release.
+
 ## v0.7.0 — 2026-08-15
 
 - `gerry tailnet`: guided, self-verifying setup for tailnet-wide dev
