@@ -72,6 +72,10 @@ var tools = []toolDef{
 		obj(map[string]any{"name": str("process name, i.e. the FQDN")}, "name")},
 	{"tail_logs", "Tail captured logs of a supervised service.",
 		obj(map[string]any{"name": str("process name"), "lines": map[string]any{"type": "integer", "description": "line count (default 100)"}}, "name")},
+	{"rename_hostname", "Atomically rename an allocation's label. Availability and reserved names are enforced; id, owner, routes and history survive.",
+		obj(map[string]any{"id": map[string]any{"type": "integer", "description": "allocation id"}, "label": str("new label")}, "id", "label")},
+	{"registry_status", "Zones with their allocation counts — the machine's hostname state at a glance. Call this before inventing hostnames or ports.",
+		obj(map[string]any{})},
 }
 
 // Run serves until EOF.
@@ -206,6 +210,31 @@ func (s *Server) callTool(ctx context.Context, name string, argsRaw json.RawMess
 			return fail(err)
 		}
 		return "released", false
+	case "rename_hostname":
+		var out map[string]any
+		err := s.API.Do(ctx, "POST", fmt.Sprintf("/v1/allocations/%d/rename", getI("id")), map[string]any{"label": getS("label")}, &out)
+		if err != nil {
+			return fail(err)
+		}
+		return okJSON(out)
+	case "registry_status":
+		var zones map[string]any
+		if err := s.API.Do(ctx, "GET", "/v1/zones", nil, &zones); err != nil {
+			return fail(err)
+		}
+		var allocs struct {
+			Allocations []map[string]any `json:"allocations"`
+		}
+		if err := s.API.Do(ctx, "GET", "/v1/allocations", nil, &allocs); err != nil {
+			return fail(err)
+		}
+		perZone := map[string]int{}
+		for _, a := range allocs.Allocations {
+			if z, ok := a["zone"].(string); ok {
+				perZone[z]++
+			}
+		}
+		return okJSON(map[string]any{"zones": zones["zones"], "allocations_per_zone": perZone, "total_allocations": len(allocs.Allocations)})
 	case "describe_zone":
 		var out map[string]any
 		err := s.API.Do(ctx, "GET", "/v1/zones", nil, &out)

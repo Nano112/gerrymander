@@ -37,6 +37,12 @@ type Config struct {
 		Enabled bool     `yaml:"enabled"`
 		Listen  string   `yaml:"listen"` // "127.0.0.1:5353"
 		Zones   []string `yaml:"zones"`  // TLDs or zones to answer for
+		// Advertise sets the IP that answers carry. Empty = loopback.
+		// "tailscale" resolves this machine's tailnet IPv4 at startup, so
+		// tailnet peers with split DNS routed here reach your dev hostnames.
+		// Any literal IP works too. Remember to make Listen reachable from
+		// the peers (e.g. ":53") when advertising a non-loopback address.
+		Advertise string `yaml:"advertise"`
 	} `yaml:"dns"`
 	Supervise bool `yaml:"supervise"`
 	// DockerLabels auto-claims hostnames for containers labeled
@@ -78,6 +84,29 @@ type Config struct {
 		Enabled  bool          `yaml:"enabled"`
 		Interval time.Duration `yaml:"interval"`
 	} `yaml:"crd_ingest"`
+	// NginxSync renders active allocations with address backends into ONE
+	// marker-tagged nginx include file and reloads — for machines where
+	// nginx is the dataplane. Files without gerry's marker are never
+	// overwritten.
+	NginxSync struct {
+		Enabled   bool          `yaml:"enabled"`
+		ConfPath  string        `yaml:"conf_path"`  // e.g. /opt/homebrew/etc/nginx/servers/gerry.conf
+		Listen    string        `yaml:"listen"`     // default "80"
+		ReloadCmd string        `yaml:"reload_cmd"` // default "nginx -s reload"; "" = write only
+		Interval  time.Duration `yaml:"interval"`
+	} `yaml:"nginx_sync"`
+	// NPMSync drives an Nginx Proxy Manager instance over its REST API:
+	// active allocations with address backends become proxy hosts (with a
+	// marker in advanced_config; UI-made hosts are never touched).
+	NPMSync struct {
+		Enabled     bool          `yaml:"enabled"`
+		URL         string        `yaml:"url"`          // e.g. http://100.71.144.24:81
+		IdentityEnv string        `yaml:"identity_env"` // default NPM_IDENTITY
+		SecretEnv   string        `yaml:"secret_env"`   // default NPM_SECRET
+		LocalHost   string        `yaml:"local_host"`   // "@local" maps here; default host.docker.internal
+		Zones       []string      `yaml:"zones"`
+		Interval    time.Duration `yaml:"interval"`
+	} `yaml:"npm_sync"`
 	// DNSSync reconciles per-label records at a DNS provider (experimental;
 	// cloudflare only). Records carry the comment "gerrymander-managed" and
 	// only commented records are ever touched.

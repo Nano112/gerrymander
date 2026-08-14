@@ -12,12 +12,17 @@ import (
 	"github.com/miekg/dns"
 )
 
-// Server answers A/AAAA for configured zones with 127.0.0.1/::1.
+// Server answers A/AAAA for configured zones. By default it advertises
+// loopback; SetAdvertise swaps in another address (e.g. this machine's
+// tailnet IP) so peers that route these zones here get a reachable answer.
 type Server struct {
 	zones []string // e.g. ["test"] or ["olsyn.test"]
 	addr  string
 	log   *slog.Logger
 	srvs  []*dns.Server
+
+	v4 net.IP
+	v6 net.IP
 }
 
 // New builds a server for the given zones (TLDs or full zones) on addr
@@ -30,7 +35,18 @@ func New(zones []string, addr string, log *slog.Logger) *Server {
 	for _, z := range zones {
 		norm = append(norm, strings.Trim(strings.ToLower(z), "."))
 	}
-	return &Server{zones: norm, addr: addr, log: log}
+	return &Server{zones: norm, addr: addr, log: log, v4: net.ParseIP("127.0.0.1"), v6: net.ParseIP("::1")}
+}
+
+// SetAdvertise changes the address answers carry. An IPv4 address clears
+// the AAAA answer (peers should not be handed ::1 for a remote machine);
+// an IPv6 address clears A.
+func (s *Server) SetAdvertise(ip net.IP) {
+	if v4 := ip.To4(); v4 != nil {
+		s.v4, s.v6 = v4, nil
+	} else {
+		s.v4, s.v6 = nil, ip
+	}
 }
 
 func (s *Server) matches(name string) bool {
@@ -54,15 +70,19 @@ func (s *Server) handle(w dns.ResponseWriter, r *dns.Msg) {
 		}
 		switch q.Qtype {
 		case dns.TypeA:
-			m.Answer = append(m.Answer, &dns.A{
-				Hdr: dns.RR_Header{Name: q.Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 10},
-				A:   net.ParseIP("127.0.0.1"),
-			})
+			if s.v4 != nil {
+				m.Answer = append(m.Answer, &dns.A{
+					Hdr: dns.RR_Header{Name: q.Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 10},
+					A:   s.v4,
+				})
+			}
 		case dns.TypeAAAA:
-			m.Answer = append(m.Answer, &dns.AAAA{
-				Hdr:  dns.RR_Header{Name: q.Name, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: 10},
-				AAAA: net.ParseIP("::1"),
-			})
+			if s.v6 != nil {
+				m.Answer = append(m.Answer, &dns.AAAA{
+					Hdr:  dns.RR_Header{Name: q.Name, Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: 10},
+					AAAA: s.v6,
+				})
+			}
 		}
 	}
 	w.WriteMsg(m)

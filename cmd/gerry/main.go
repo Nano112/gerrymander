@@ -15,8 +15,8 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"sort"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -38,6 +38,8 @@ import (
 	"github.com/Nano112/gerrymander/internal/k8slite"
 	"github.com/Nano112/gerrymander/internal/manifest"
 	"github.com/Nano112/gerrymander/internal/mcp"
+	"github.com/Nano112/gerrymander/internal/nginxsync"
+	"github.com/Nano112/gerrymander/internal/npmsync"
 	"github.com/Nano112/gerrymander/internal/observe"
 	"github.com/Nano112/gerrymander/internal/proxy"
 	"github.com/Nano112/gerrymander/internal/service"
@@ -277,6 +279,49 @@ func cmdServe(args []string) error {
 		go ing.Run(ctx)
 	}
 
+	if cfg.NPMSync.Enabled {
+		idEnv, secEnv := cfg.NPMSync.IdentityEnv, cfg.NPMSync.SecretEnv
+		if idEnv == "" {
+			idEnv = "NPM_IDENTITY"
+		}
+		if secEnv == "" {
+			secEnv = "NPM_SECRET"
+		}
+		identity, secret := os.Getenv(idEnv), os.Getenv(secEnv)
+		if cfg.NPMSync.URL == "" || identity == "" || secret == "" {
+			return fmt.Errorf("npm_sync needs url + %s + %s", idEnv, secEnv)
+		}
+		zones := cfg.NPMSync.Zones
+		if len(zones) == 0 {
+			zones = zoneNames(cfg)
+		}
+		np := &npmsync.Sync{
+			Store: st, Zones: zones, URL: strings.TrimRight(cfg.NPMSync.URL, "/"),
+			Identity: identity, Secret: secret, LocalHost: cfg.NPMSync.LocalHost,
+			Interval: cfg.NPMSync.Interval, Log: log,
+		}
+		go np.Run(ctx)
+	}
+
+	if cfg.NginxSync.Enabled {
+		if cfg.NginxSync.ConfPath == "" {
+			return fmt.Errorf("nginx_sync needs conf_path (the include file gerry will own)")
+		}
+		listen := cfg.NginxSync.Listen
+		if listen == "" {
+			listen = "80"
+		}
+		reload := cfg.NginxSync.ReloadCmd
+		if reload == "" {
+			reload = "nginx -s reload"
+		}
+		ns := &nginxsync.Sync{
+			Store: st, Zones: zoneNames(cfg), ConfPath: cfg.NginxSync.ConfPath,
+			Listen: listen, ReloadCmd: reload, Interval: cfg.NginxSync.Interval, Log: log,
+		}
+		go ns.Run(ctx)
+	}
+
 	if cfg.DNSSync.Enabled {
 		if cfg.DNSSync.Provider != "cloudflare" {
 			return fmt.Errorf("dns_sync.provider %q not supported (cloudflare)", cfg.DNSSync.Provider)
@@ -313,6 +358,23 @@ func cmdServe(args []string) error {
 
 	if cfg.DNS.Enabled {
 		d := dnsserver.New(cfg.DNS.Zones, cfg.DNS.Listen, log)
+		switch adv := cfg.DNS.Advertise; adv {
+		case "":
+			// loopback default
+		case "tailscale":
+			ip, err := tailscaleIP()
+			if err != nil {
+				return fmt.Errorf("dns.advertise tailscale: %w", err)
+			}
+			d.SetAdvertise(ip)
+			log.Info("dns advertising tailnet address", "ip", ip.String())
+		default:
+			ip := net.ParseIP(adv)
+			if ip == nil {
+				return fmt.Errorf("dns.advertise: %q is neither an IP nor \"tailscale\"", adv)
+			}
+			d.SetAdvertise(ip)
+		}
 		go func() {
 			if err := d.Run(ctx); err != nil {
 				log.Error("dns", "err", err)
@@ -1047,3 +1109,12 @@ func cmdCAExport(args []string) error {
 
 // silence unused-import lint for net (used indirectly on some builds)
 var _ = net.JoinHostPort
+
+// zoneNames lists the configured zone names.
+func zoneNames(cfg *config.Config) []string {
+	out := make([]string, 0, len(cfg.Zones))
+	for _, z := range cfg.Zones {
+		out = append(out, z.Name)
+	}
+	return out
+}

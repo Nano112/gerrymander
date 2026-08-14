@@ -24,6 +24,18 @@ talks to the local daemon.)
 - **status**: what's registered, what's listening, what the proxy routes.
   The machine's actual state instead of the agent's assumptions.
 
+## The skill (Claude Code)
+
+The repo ships an agent skill that teaches the rules — allocate instead of
+guess, read `gerry status` before killing listeners, release what you
+create:
+
+```bash
+mkdir -p ~/.claude/skills && cp -r skills/gerry ~/.claude/skills/gerry
+```
+
+Project-local installs work the same way into `.claude/skills/`.
+
 ## Why this beats "just pick a port"
 
 The failure mode isn't picking a port. It's two agents (or an agent and

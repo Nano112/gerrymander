@@ -56,7 +56,7 @@ func TestMCPGoldenFlow(t *testing.T) {
 	var list map[string]any
 	json.Unmarshal([]byte(lines[1]), &list)
 	toolList := list["result"].(map[string]any)["tools"].([]any)
-	if len(toolList) != 9 {
+	if len(toolList) != 11 {
 		t.Fatalf("tools/list: %d tools", len(toolList))
 	}
 	// claim_port twice → same sticky value
