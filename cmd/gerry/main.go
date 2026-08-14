@@ -95,6 +95,8 @@ func main() {
 		err = cmdCAExport(args)
 	case "trust":
 		err = cmdTrust(args)
+	case "bootstrap":
+		err = cmdBootstrap(args)
 	case "setup":
 		err = cmdSetup(args)
 	case "uninstall":
@@ -119,6 +121,7 @@ func usage() {
 usage: gerry <command> [flags]
 
 server:
+  bootstrap [--no-setup]       one-shot first run: service + DNS + trust
   serve --config <file>        run API (+ proxy/DNS/observer per config)
   ca-export --dir <dir>        print the local CA root certificate PEM
   trust [--print]              install the daemon's CA into the system trust store

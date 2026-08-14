@@ -47,8 +47,15 @@ else
 fi
 
 echo "gerry $("$DEST/gerry" version 2>/dev/null | cut -d' ' -f2) installed."
-echo
-echo "next steps:"
-echo "  gerry service install   # daemon on login"
-echo "  gerry setup             # DNS + TLS trust (reversible)"
-echo "  gerry init              # in a project"
+
+# Full bootstrap (daemon + DNS + trust) unless the caller opted out. sudo
+# prompts read /dev/tty, so this works under `curl | sh`; without a tty
+# (CI, containers) we skip and say what to run.
+if [ "${GERRY_INSTALL_ONLY:-}" = "1" ]; then
+  echo "GERRY_INSTALL_ONLY=1 — skipping bootstrap. Run: gerry bootstrap"
+elif [ -e /dev/tty ] && ( : < /dev/tty ) 2>/dev/null; then
+  echo
+  "$DEST/gerry" bootstrap < /dev/tty
+else
+  echo "no tty — skipping bootstrap. Run: gerry bootstrap"
+fi

@@ -6,10 +6,14 @@ of what actually happened.
 ## 1. Install
 
 ```bash
-brew install nano112/tap/gerry
-# or, any platform:
 curl -fsSL https://raw.githubusercontent.com/Nano112/gerrymander/main/install.sh | sh
 ```
+
+One command: platform detected, binary installed, then `gerry bootstrap`
+runs automatically — daemon on login, DNS for dev zones, TLS trust. With
+brew it's two: `brew install nano112/tap/gerry && gerry bootstrap`.
+`GERRY_INSTALL_ONLY=1` skips the bootstrap if you want the pieces
+separately (steps 2–3 below are what it does for you).
 
 ## 2. Run the daemon
 

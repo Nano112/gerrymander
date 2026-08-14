@@ -65,12 +65,11 @@ Around that core:
 ## Quickstart (dev machine)
 
 ```sh
-brew install nano112/tap/gerry
-# or: curl -fsSL https://raw.githubusercontent.com/Nano112/gerrymander/main/install.sh | sh
-# or: go install github.com/Nano112/gerrymander/cmd/gerry@latest
+curl -fsSL https://raw.githubusercontent.com/Nano112/gerrymander/main/install.sh | sh
+# one command: installs + bootstraps (daemon on login, DNS, TLS trust)
+# brew: brew install nano112/tap/gerry && gerry bootstrap
+# go:   go install github.com/Nano112/gerrymander/cmd/gerry@latest && gerry bootstrap
 
-gerry service install                      # daemon on login
-gerry setup                                # DNS + TLS trust, reversible
 cd my-app && gerry init && gerry dev       # → https://my-app.test
 
 # the pieces, à la carte:

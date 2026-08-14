@@ -11,9 +11,15 @@ machine. The same binary, model, and CLI run on a laptop and in production.
 ## Sixty seconds to a real hostname
 
 ```bash
-brew install nano112/tap/gerry     # or: curl -fsSL https://raw.githubusercontent.com/Nano112/gerrymander/main/install.sh | sh
-gerry service install              # daemon on login (proxy + DNS + registry)
-gerry setup                        # resolver + TLS trust — reversible, marker-tagged
+curl -fsSL https://raw.githubusercontent.com/Nano112/gerrymander/main/install.sh | sh
+```
+
+That's the whole setup: it detects your platform, installs the binary, puts
+the daemon on login, wires DNS for dev zones, and installs the TLS trust —
+all reversible and marker-tagged. (Prefer brew? `brew install
+nano112/tap/gerry && gerry bootstrap` is the same thing.) Then:
+
+```bash
 cd my-app && gerry init            # scaffolds gerrymander.yaml
 bun run dev                        # → https://my-app.test, trusted TLS, done
 ```

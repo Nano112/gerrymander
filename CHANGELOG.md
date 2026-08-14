@@ -3,6 +3,13 @@
 All notable changes to gerrymander. Versions follow [semver](https://semver.org);
 until 1.0, minor bumps may include breaking changes (called out explicitly).
 
+## v0.5.1 — 2026-08-14
+
+- `gerry bootstrap`: the whole first run as one idempotent command — service
+  install (skipped when a daemon already serves the API, e.g. container
+  mode), wait for health, then DNS + trust. The curl installer runs it
+  automatically when a tty is available (`GERRY_INSTALL_ONLY=1` opts out).
+
 ## v0.5.0 — 2026-08-14
 
 ### Added
