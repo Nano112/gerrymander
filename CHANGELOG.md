@@ -3,6 +3,15 @@
 All notable changes to gerrymander. Versions follow [semver](https://semver.org);
 until 1.0, minor bumps may include breaking changes (called out explicitly).
 
+## v0.7.4 — 2026-08-15
+
+- `gerry init` finishes vite projects itself: offers to install
+  gerrymander-vite (package manager detected from the lockfile) and wire
+  vite.config — the whole setup is `gerry init` + `npm run dev`.
+- gerrymander-vite 0.2.0: single CJS file with ESM interop (ESM-only
+  broke projects without \"type\": \"module\"), allows tailnet machine
+  names and their subdomains.
+
 ## v0.7.3 — 2026-08-15
 
 - /v1/ca serves a named certificate (gerrymander-root-ca.crt, x509
