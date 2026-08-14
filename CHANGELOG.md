@@ -7,10 +7,35 @@ until 1.0, minor bumps may include breaking changes (called out explicitly).
 
 ### Added
 - **Kubernetes actuator** (`actuator:` config, off by default): materializes
-  Traefik IngressRoutes for allocations that carry `service` backends. Only
-  ever creates/updates/deletes routes labeled `app.gerrymander/managed=true`,
-  enforces a priority floor above tenant catch-alls, repairs drift, and
-  removes routes when allocations are released.
+  routes for allocations that carry `service` backends. Two providers:
+  `traefik-crd` (IngressRoutes, priority floor above tenant catch-alls) and
+  `gateway-api` (HTTPRoutes attached to a configured Gateway, native `*.`
+  wildcards). Both only ever create/update/delete resources labeled
+  `app.gerrymander/managed=true`, repair drift, and remove routes when
+  allocations are released — proven by a k3d e2e that runs in CI.
+- **Scoped API tokens** (`gerry token create|ls|revoke`): owner-scoped
+  credentials confined to one owner's tenant hostnames — claims forced to
+  the token's identity, listings filtered, every admin surface closed.
+  Plaintext shown once, SHA-256 stored, revocation immediate. The
+  separation needed to hand registry access to tenants or CI jobs.
+- **Audit trail endpoint**: `GET /v1/allocations/{id}/events` exposes the
+  append-only event history, under the same ownership rules.
+- **Compose-label auto-claim**: label a container
+  `gerrymander.hostname=api.myapp.test` (optional `gerrymander.port`,
+  `gerrymander.network`) and the hostname exists for the container's life —
+  `docker compose up` claims, `down` releases. Only touches allocations it
+  created (`owner_kind=docker-label`).
+- **HostnameReservation CRD** (`gerrymander.dev/v1alpha1`) + `crd_ingest`:
+  declare registry entries in Git; the CR is input, the database is truth —
+  reservations that lose a race stay unfulfilled instead of stealing names.
+- **Helm chart** (`deploy/helm/gerrymander`): registry + observer, opt-in
+  actuator (RBAC widens automatically), monitoring toggles.
+- **Cloudflare DNS sync** (experimental): per-label records for active
+  allocations; only records commented `gerrymander-managed` are ever
+  touched.
+- **Windows builds (beta)**: cross-compiled zips in releases; `gerry dev`
+  and supervision use `cmd /C` + `taskkill /T`; `gerry trust` via certutil;
+  `gerry setup` prints the NRPT recipe. Not yet exercised on real Windows.
 - **Versioned schema migrations** (`PRAGMA user_version` on SQLite, a
   `schema_migrations` table on Postgres). Databases created by earlier
   versions adopt the baseline transparently; future upgrades are ordered
