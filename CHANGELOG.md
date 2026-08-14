@@ -3,6 +3,12 @@
 All notable changes to gerrymander. Versions follow [semver](https://semver.org);
 until 1.0, minor bumps may include breaking changes (called out explicitly).
 
+## v0.7.5 — 2026-08-15
+
+- `gerry update` discovers releases via the redirect on
+  /releases/latest instead of the rate-limited GitHub API (403s hit
+  live); API remains a fallback honoring GITHUB_TOKEN.
+
 ## v0.7.4 — 2026-08-15
 
 - `gerry init` finishes vite projects itself: offers to install
