@@ -65,9 +65,15 @@ Around that core:
 ## Quickstart (dev machine)
 
 ```sh
-go install github.com/Nano112/gerrymander/cmd/gerry@latest
-# vite projects: bun add -d gerrymander-vite   (or npm i -D)
-gerry serve --config gerry.yaml &          # api + proxy + optional DNS
+brew install nano112/tap/gerry
+# or: curl -fsSL https://raw.githubusercontent.com/Nano112/gerrymander/main/install.sh | sh
+# or: go install github.com/Nano112/gerrymander/cmd/gerry@latest
+
+gerry service install                      # daemon on login
+gerry setup                                # DNS + TLS trust, reversible
+cd my-app && gerry init && gerry dev       # → https://my-app.test
+
+# the pieces, à la carte:
 gerry claim --zone myapp.test --label api  # claim a hostname
 gerry port --owner myapp/vite              # sticky port, 51000+
 gerry up -f gerrymander.yaml               # apply a project manifest
