@@ -13,7 +13,7 @@ spec:
     matchLabels:
       app: gerrymander
   endpoints:
-    - port: api
+    - port: metrics
       path: /metrics
       interval: 60s
 ---

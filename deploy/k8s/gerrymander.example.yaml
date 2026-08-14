@@ -62,6 +62,9 @@ data:
     db: /data/gerry.db
     api:
       listen: :4780
+      # Metrics on a dedicated port: the public ingress below only fronts
+      # :4780, so /metrics is never internet-reachable.
+      metrics_listen: :9091
     zones:
       - { name: example.com, profile: prod }
     proxy:
@@ -107,6 +110,7 @@ spec:
           args: ["serve", "--config", "/etc/gerry/gerry.yaml"]
           ports:
             - { containerPort: 4780, name: api }
+            - { containerPort: 9091, name: metrics }
           env:
             - name: GERRY_API_KEY
               valueFrom:
@@ -140,6 +144,7 @@ spec:
   selector: { app: gerrymander }
   ports:
     - { port: 4780, targetPort: 4780, name: api }
+    - { port: 9091, targetPort: 9091, name: metrics }
 ---
 # Route for the API. NOTE for Traefik estates with a low-priority tenant
 # catch-all (HostRegexp at priority 1): every bare-Host route must carry a

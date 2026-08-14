@@ -72,6 +72,44 @@ type Server struct {
 	// CAPEM, when set, is served at GET /v1/ca so `gerry trust` can fetch
 	// the exact CA the proxy mints with (public material, unauthenticated).
 	CAPEM []byte
+	// HideMetrics keeps /metrics off this mux (it is being served on a
+	// dedicated listener instead, so a public ingress can't reach it).
+	HideMetrics bool
+}
+
+var (
+	httpRequests = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "gerry_http_requests_total",
+		Help: "API requests by matched route pattern, method and status code.",
+	}, []string{"route", "method", "code"})
+	httpDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "gerry_http_request_seconds",
+		Help:    "API request latency by matched route pattern.",
+		Buckets: []float64{.005, .025, .1, .5, 2},
+	}, []string{"route"})
+)
+
+type statusWriter struct {
+	http.ResponseWriter
+	code int
+}
+
+func (w *statusWriter) WriteHeader(c int) { w.code = c; w.ResponseWriter.WriteHeader(c) }
+
+// instrument records per-request metrics. Route label is the ServeMux
+// pattern (bounded cardinality), never the raw URL.
+func instrument(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sw := &statusWriter{ResponseWriter: w, code: 200}
+		start := time.Now()
+		next.ServeHTTP(sw, r)
+		route := r.Pattern
+		if route == "" {
+			route = "unmatched"
+		}
+		httpRequests.WithLabelValues(route, r.Method, strconv.Itoa(sw.code)).Inc()
+		httpDuration.WithLabelValues(route).Observe(time.Since(start).Seconds())
+	})
 }
 
 func (s *Server) mutated() {
@@ -100,7 +138,9 @@ func (s *Server) Handler() http.Handler {
 		}
 		io.WriteString(w, "ok\n")
 	})
-	mux.Handle("GET /metrics", promhttp.Handler())
+	if !s.HideMetrics {
+		mux.Handle("GET /metrics", promhttp.Handler())
+	}
 	mux.HandleFunc("GET /v1/ca", func(w http.ResponseWriter, r *http.Request) {
 		if len(s.CAPEM) == 0 {
 			writeErr(w, 404, "not_found", "this daemon runs no proxy / has no CA")
@@ -132,7 +172,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/processes/{name}/stop", s.auth(s.handleProcessStop))
 	mux.HandleFunc("GET /v1/processes/{name}/logs", s.auth(s.handleProcessLogs))
 
-	return mux
+	return instrument(mux)
 }
 
 func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {

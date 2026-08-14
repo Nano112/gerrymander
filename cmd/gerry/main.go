@@ -22,6 +22,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"github.com/Nano112/gerrymander/internal/actuate"
 	"github.com/Nano112/gerrymander/internal/api"
 	"github.com/Nano112/gerrymander/internal/client"
@@ -237,7 +239,12 @@ func cmdServe(args []string) error {
 		go act.Run(ctx)
 	}
 
-	srv := &api.Server{Store: st, Alloc: alloc, Ports: ports, APIKey: os.Getenv(cfg.API.KeyEnv), Log: log}
+	apiKey := os.Getenv(cfg.API.KeyEnv)
+	if apiKey == "" && !isLoopbackListen(cfg.API.Listen) && !cfg.API.AllowUnauthenticated {
+		return fmt.Errorf("api.listen %s is reachable off-host but %s is empty — refusing to serve an open registry (set the key, bind to 127.0.0.1, or set api.allow_unauthenticated: true)", cfg.API.Listen, cfg.API.KeyEnv)
+	}
+	srv := &api.Server{Store: st, Alloc: alloc, Ports: ports, APIKey: apiKey, Log: log,
+		HideMetrics: cfg.API.MetricsListen != ""}
 	if obs != nil {
 		srv.Observer = obs
 	}
@@ -294,6 +301,17 @@ func cmdServe(args []string) error {
 		}()
 	}
 
+	if cfg.API.MetricsListen != "" {
+		mm := http.NewServeMux()
+		mm.Handle("GET /metrics", promhttp.Handler())
+		go func() {
+			log.Info("metrics listener", "addr", cfg.API.MetricsListen)
+			if err := http.ListenAndServe(cfg.API.MetricsListen, mm); err != nil {
+				log.Error("metrics listener", "err", err)
+			}
+		}()
+	}
+
 	httpSrv := &http.Server{Addr: cfg.API.Listen, Handler: srv.Handler()}
 	go func() {
 		<-ctx.Done()
@@ -317,6 +335,20 @@ func cmdServe(args []string) error {
 
 // portHolder best-effort identifies what listens on an addr ("host:port")
 // so bind-conflict errors name the culprit instead of shrugging.
+// isLoopbackListen reports whether a listen address can only be reached from
+// this host. ":4780" and "0.0.0.0:…" are NOT loopback.
+func isLoopbackListen(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil || host == "" {
+		return false
+	}
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
 func portHolder(addr string) string {
 	i := strings.LastIndex(addr, ":")
 	if i < 0 {

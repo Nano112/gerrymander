@@ -15,6 +15,13 @@ type Config struct {
 	API struct {
 		Listen string `yaml:"listen"`  // default 127.0.0.1:4780
 		KeyEnv string `yaml:"key_env"` // env var holding the API key (default GERRY_API_KEY)
+		// MetricsListen, when set, serves /metrics on its own listener and
+		// REMOVES it from the API mux — so a public ingress in front of the
+		// API cannot expose metrics. Point your scraper here (e.g. ":9091").
+		MetricsListen string `yaml:"metrics_listen"`
+		// AllowUnauthenticated permits a non-loopback listen with no API key.
+		// Without it, gerry refuses to serve an open registry off-loopback.
+		AllowUnauthenticated bool `yaml:"allow_unauthenticated"`
 	} `yaml:"api"`
 	Zones []ZoneConfig `yaml:"zones"`
 	Proxy struct {
