@@ -158,6 +158,18 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
 CREATE INDEX IF NOT EXISTS idx_alloc_owner ON allocations(owner_ref);
 CREATE INDEX IF NOT EXISTS idx_alloc_state ON allocations(state);
 CREATE INDEX IF NOT EXISTS idx_events_subject ON events(subject_type, subject_id);
+`, `
+CREATE TABLE IF NOT EXISTS tokens (
+	id INTEGER PRIMARY KEY,
+	name TEXT NOT NULL UNIQUE,
+	hash TEXT NOT NULL UNIQUE,
+	scope TEXT NOT NULL DEFAULT 'owner',
+	owner_ref TEXT NOT NULL DEFAULT '',
+	zones TEXT NOT NULL DEFAULT '[]',
+	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	last_used_at TIMESTAMP,
+	revoked_at TIMESTAMP
+);
 `}
 
 // migrate runs every migration past the DB's recorded schema version.

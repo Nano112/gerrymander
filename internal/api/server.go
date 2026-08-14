@@ -151,8 +151,8 @@ func (s *Server) Handler() http.Handler {
 	})
 
 	mux.HandleFunc("GET /v1/zones", s.auth(s.handleZones))
-	mux.HandleFunc("POST /v1/zones", s.auth(s.handleCreateZone))
-	mux.HandleFunc("DELETE /v1/zones/{zone}", s.auth(s.handleDeleteZone))
+	mux.HandleFunc("POST /v1/zones", s.adminOnly(s.handleCreateZone))
+	mux.HandleFunc("DELETE /v1/zones/{zone}", s.adminOnly(s.handleDeleteZone))
 	mux.HandleFunc("GET /v1/zones/{zone}/availability", s.auth(s.handleAvailability))
 	mux.HandleFunc("POST /v1/claims", s.auth(s.handleClaim))
 	mux.HandleFunc("POST /v1/allocations", s.auth(s.handleClaim)) // alias
@@ -163,29 +163,112 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/allocations/{id}/rename", s.auth(s.handleRename))
 	mux.HandleFunc("POST /v1/allocations/{id}/renew", s.auth(s.handleRenew))
 	mux.HandleFunc("DELETE /v1/allocations/{id}", s.auth(s.handleRelease))
-	mux.HandleFunc("GET /v1/ports", s.auth(s.handleListPorts))
-	mux.HandleFunc("POST /v1/ports", s.auth(s.handleClaimPort))
-	mux.HandleFunc("POST /v1/manifest/apply", s.auth(s.handleManifestApply))
-	mux.HandleFunc("GET /v1/conflicts", s.auth(s.handleConflicts))
-	mux.HandleFunc("GET /v1/processes", s.auth(s.handleProcesses))
-	mux.HandleFunc("POST /v1/processes/{name}/start", s.auth(s.handleProcessStart))
-	mux.HandleFunc("POST /v1/processes/{name}/stop", s.auth(s.handleProcessStop))
-	mux.HandleFunc("GET /v1/processes/{name}/logs", s.auth(s.handleProcessLogs))
+	mux.HandleFunc("GET /v1/ports", s.adminOnly(s.handleListPorts))
+	mux.HandleFunc("POST /v1/ports", s.adminOnly(s.handleClaimPort))
+	mux.HandleFunc("POST /v1/manifest/apply", s.adminOnly(s.handleManifestApply))
+	mux.HandleFunc("GET /v1/conflicts", s.adminOnly(s.handleConflicts))
+	mux.HandleFunc("GET /v1/processes", s.adminOnly(s.handleProcesses))
+	mux.HandleFunc("POST /v1/processes/{name}/start", s.adminOnly(s.handleProcessStart))
+	mux.HandleFunc("POST /v1/processes/{name}/stop", s.adminOnly(s.handleProcessStop))
+	mux.HandleFunc("GET /v1/processes/{name}/logs", s.adminOnly(s.handleProcessLogs))
+	mux.HandleFunc("POST /v1/tokens", s.adminOnly(s.handleCreateToken))
+	mux.HandleFunc("GET /v1/tokens", s.adminOnly(s.handleListTokens))
+	mux.HandleFunc("DELETE /v1/tokens/{name}", s.adminOnly(s.handleRevokeToken))
+	mux.HandleFunc("GET /v1/allocations/{id}/events", s.auth(s.handleAllocationEvents))
 
 	return instrument(mux)
 }
 
+// Principal is who a request acts as, resolved from the bearer credential.
+// The root API key (and keyless loopback dev mode) is an admin; scoped
+// tokens from the tokens table may be confined to one owner_ref and a zone
+// allowlist.
+type Principal struct {
+	Scope    string // store.ScopeAdmin | store.ScopeOwner
+	Name     string // token name, or "root"
+	OwnerRef string
+	Zones    []string // empty = all zones
+}
+
+func (p Principal) admin() bool { return p.Scope == store.ScopeAdmin }
+
+func (p Principal) zoneAllowed(zone string) bool {
+	if len(p.Zones) == 0 {
+		return true
+	}
+	for _, z := range p.Zones {
+		if z == zone {
+			return true
+		}
+	}
+	return false
+}
+
+type principalKey struct{}
+
+func principalFrom(r *http.Request) Principal {
+	if p, ok := r.Context().Value(principalKey{}).(Principal); ok {
+		return p
+	}
+	return Principal{Scope: store.ScopeAdmin, Name: "root"}
+}
+
 func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if s.APIKey != "" {
-			got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-			if subtle.ConstantTimeCompare([]byte(got), []byte(s.APIKey)) != 1 {
-				writeErr(w, 401, "unauthorized", "missing or invalid API key")
+		p := Principal{Scope: store.ScopeAdmin, Name: "root"}
+		got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		switch {
+		case s.APIKey != "" && subtle.ConstantTimeCompare([]byte(got), []byte(s.APIKey)) == 1:
+			// root key
+		case strings.HasPrefix(got, "gk_"):
+			tok, err := s.Store.LookupToken(r.Context(), got)
+			if err != nil {
+				writeErr(w, 401, "unauthorized", "unknown or revoked token")
 				return
 			}
+			p = Principal{Scope: tok.Scope, Name: tok.Name, OwnerRef: tok.OwnerRef, Zones: tok.Zones}
+		case s.APIKey == "":
+			// keyless loopback dev mode (serve refuses this off-loopback)
+		default:
+			writeErr(w, 401, "unauthorized", "missing or invalid API key")
+			return
+		}
+		next(w, r.WithContext(context.WithValue(r.Context(), principalKey{}, p)))
+	}
+}
+
+// adminOnly gates endpoints that scoped tokens must never reach.
+func (s *Server) adminOnly(next http.HandlerFunc) http.HandlerFunc {
+	return s.auth(func(w http.ResponseWriter, r *http.Request) {
+		if !principalFrom(r).admin() {
+			writeErr(w, 403, "forbidden", "this endpoint requires an admin credential")
+			return
 		}
 		next(w, r)
+	})
+}
+
+// canTouchAllocation enforces owner-scope on by-id allocation operations.
+// Admins pass without a lookup; owner tokens must own the allocation.
+func (s *Server) canTouchAllocation(w http.ResponseWriter, r *http.Request, id int64) bool {
+	p := principalFrom(r)
+	if p.admin() {
+		return true
 	}
+	a, err := s.Store.GetAllocation(r.Context(), id)
+	if errors.Is(err, store.ErrNotFound) {
+		writeErr(w, 404, "not_found", "no such allocation")
+		return false
+	}
+	if err != nil {
+		writeErr(w, 500, "internal", err.Error())
+		return false
+	}
+	if a.OwnerRef != p.OwnerRef || !p.zoneAllowed(a.ZoneName) {
+		writeErr(w, 403, "forbidden", "allocation belongs to a different owner")
+		return false
+	}
+	return true
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
@@ -277,6 +360,21 @@ func (s *Server) handleClaim(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "invalid", "bad JSON: "+err.Error())
 		return
 	}
+	if p := principalFrom(r); !p.admin() {
+		// Owner tokens claim tenant hostnames for themselves, nothing else.
+		if req.OwnerRef != "" && req.OwnerRef != p.OwnerRef {
+			writeErr(w, 403, "forbidden", "token cannot claim for another owner")
+			return
+		}
+		if !p.zoneAllowed(req.Zone) {
+			writeErr(w, 403, "forbidden", "token is not scoped to zone "+req.Zone)
+			return
+		}
+		req.OwnerRef = p.OwnerRef
+		req.OwnerKind = "tenant"
+		req.Kind = core.KindTenant
+		req.Source = core.SourceAPI
+	}
 	// Idempotency: replay the stored response verbatim.
 	idem := r.Header.Get("Idempotency-Key")
 	if idem != "" {
@@ -319,10 +417,14 @@ func (s *Server) handleClaim(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleListAllocations(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	allocs, err := s.Store.ListAllocations(r.Context(), store.AllocFilter{
+	filter := store.AllocFilter{
 		Zone: q.Get("zone"), Kind: q.Get("kind"), State: q.Get("state"),
 		OwnerRef: q.Get("owner_ref"), Project: q.Get("project"), ExcludeReleased: true,
-	})
+	}
+	if p := principalFrom(r); !p.admin() {
+		filter.OwnerRef = p.OwnerRef // owner tokens only ever see their own
+	}
+	allocs, err := s.Store.ListAllocations(r.Context(), filter)
 	if err != nil {
 		writeErr(w, 500, "internal", err.Error())
 		return
@@ -344,6 +446,9 @@ func (s *Server) handleGetAllocation(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !s.canTouchAllocation(w, r, id) {
+		return
+	}
 	a, err := s.Store.GetAllocation(r.Context(), id)
 	if errors.Is(err, store.ErrNotFound) {
 		writeErr(w, 404, "not_found", "no such allocation")
@@ -359,6 +464,9 @@ func (s *Server) handleGetAllocation(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handlePatchAllocation(w http.ResponseWriter, r *http.Request) {
 	id, ok := s.pathID(w, r)
 	if !ok {
+		return
+	}
+	if !s.canTouchAllocation(w, r, id) {
 		return
 	}
 	a, err := s.Store.GetAllocation(r.Context(), id)
@@ -377,6 +485,10 @@ func (s *Server) handlePatchAllocation(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
 		writeErr(w, 400, "invalid", err.Error())
+		return
+	}
+	if p := principalFrom(r); !p.admin() && (patch.State != nil || patch.Labels != nil) {
+		writeErr(w, 403, "forbidden", "owner tokens may only patch spec")
 		return
 	}
 	from := a.State
@@ -405,6 +517,9 @@ func (s *Server) handleCommit(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !s.canTouchAllocation(w, r, id) {
+		return
+	}
 	a, err := s.Alloc.Commit(r.Context(), id)
 	if err != nil {
 		writeErr(w, 409, "conflict", err.Error())
@@ -418,6 +533,9 @@ func (s *Server) handleCommit(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleRename(w http.ResponseWriter, r *http.Request) {
 	id, ok := s.pathID(w, r)
 	if !ok {
+		return
+	}
+	if !s.canTouchAllocation(w, r, id) {
 		return
 	}
 	var body struct {
@@ -454,6 +572,9 @@ func (s *Server) handleRenew(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !s.canTouchAllocation(w, r, id) {
+		return
+	}
 	var body struct {
 		TTL core.Duration `json:"ttl"`
 	}
@@ -469,6 +590,9 @@ func (s *Server) handleRenew(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleRelease(w http.ResponseWriter, r *http.Request) {
 	id, ok := s.pathID(w, r)
 	if !ok {
+		return
+	}
+	if !s.canTouchAllocation(w, r, id) {
 		return
 	}
 	if err := s.Alloc.Release(r.Context(), id); err != nil {

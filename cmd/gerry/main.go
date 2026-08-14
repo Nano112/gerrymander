@@ -67,6 +67,8 @@ func main() {
 		err = cmdRename(args)
 	case "zone":
 		err = cmdZone(args)
+	case "token":
+		err = cmdToken(args)
 	case "run":
 		err = cmdRun(args)
 	case "dev":
