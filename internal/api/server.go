@@ -143,14 +143,20 @@ func (s *Server) Handler() http.Handler {
 	if !s.HideMetrics {
 		mux.Handle("GET /metrics", promhttp.Handler())
 	}
-	mux.HandleFunc("GET /v1/ca", func(w http.ResponseWriter, r *http.Request) {
+	serveCA := func(w http.ResponseWriter, r *http.Request) {
 		if len(s.CAPEM) == 0 {
 			writeErr(w, 404, "not_found", "this daemon runs no proxy / has no CA")
 			return
 		}
-		w.Header().Set("Content-Type", "application/x-pem-file")
+		// Phones decide what a download IS from these two headers: the
+		// x509 content-type plus a .crt filename make iOS/Android offer
+		// the install-certificate flow instead of a mystery file.
+		w.Header().Set("Content-Type", "application/x-x509-ca-cert")
+		w.Header().Set("Content-Disposition", `attachment; filename="gerrymander-root-ca.crt"`)
 		w.Write(s.CAPEM)
-	})
+	}
+	mux.HandleFunc("GET /v1/ca", serveCA)
+	mux.HandleFunc("GET /v1/ca.crt", serveCA) // extension in the URL too — some browsers trust that over headers
 
 	mux.HandleFunc("GET /v1/zones", s.auth(s.handleZones))
 	mux.HandleFunc("POST /v1/zones", s.adminOnly(s.handleCreateZone))

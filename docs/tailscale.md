@@ -58,8 +58,9 @@ GERRY_API=http://100.x.y.z:4780 gerry trust
 ```
 
 (`/v1/ca` is unauthenticated by design; the CA certificate is public
-material.) Phones: fetch `http://100.x.y.z:4780/v1/ca` in the browser and
-install the profile, or skip trust and accept the warning.
+material.) Phones: open `http://100.x.y.z:4780/v1/ca.crt` in the browser —
+it downloads as a named certificate the OS knows how to install — or skip
+trust and accept the warning.
 
 ## No console access? The machine-name route
 

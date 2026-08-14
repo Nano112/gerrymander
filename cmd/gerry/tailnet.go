@@ -99,7 +99,7 @@ func cmdTailnet(args []string) error {
 	fmt.Println("device trust (routes 1 & 2 use gerry's CA):")
 	if apiOnTailnet(self.ip) {
 		fmt.Printf("  laptops:  GERRY_API=http://%s:4780 gerry trust\n", self.ip)
-		fmt.Printf("  phones:   open http://%s:4780/v1/ca and install the profile (or tap through the warning once)\n", self.ip)
+		fmt.Printf("  phones:   open http://%s:4780/v1/ca.crt and install the certificate (or tap through the warning once)\n", self.ip)
 	} else {
 		fmt.Printf("  ✗ the API is not reachable at %s:4780, so peers cannot fetch the CA.\n", self.ip)
 		fmt.Println("    host mode: set api.listen to \":4780\" (an API key becomes required off-loopback)")
