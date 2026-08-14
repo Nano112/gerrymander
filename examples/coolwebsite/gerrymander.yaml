@@ -1,0 +1,14 @@
+# Two hostnames, one project. `gerry up` creates the zone if it doesn't
+# exist, claims both hostnames, grants each service a sticky port from the
+# dev pool, and routes the proxy at them. The dev servers themselves run on
+# the host (see dev.sh); the proxy reaches them via host.docker.internal
+# because the local gerry daemon runs in a container.
+project: coolwebsite
+zone: coolwebsite.test
+services:
+  frontend:
+    hostnames: [coolwebsite.test]
+    port_pool: dev
+  api:
+    hostnames: [api.coolwebsite.test]
+    port_pool: dev

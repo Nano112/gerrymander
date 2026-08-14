@@ -90,6 +90,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /metrics", promhttp.Handler())
 
 	mux.HandleFunc("GET /v1/zones", s.auth(s.handleZones))
+	mux.HandleFunc("POST /v1/zones", s.auth(s.handleCreateZone))
 	mux.HandleFunc("GET /v1/zones/{zone}/availability", s.auth(s.handleAvailability))
 	mux.HandleFunc("POST /v1/claims", s.auth(s.handleClaim))
 	mux.HandleFunc("POST /v1/allocations", s.auth(s.handleClaim)) // alias
@@ -141,6 +142,27 @@ func (s *Server) handleZones(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"zones": zones})
+}
+
+func (s *Server) handleCreateZone(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name    string `json:"name"`
+		Profile string `json:"profile"` // "dev" | "prod" (default dev)
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
+		writeErr(w, 400, "invalid", "body must be {\"name\": \"zone\", \"profile\": \"dev|prod\"}")
+		return
+	}
+	if req.Profile == "" {
+		req.Profile = "dev"
+	}
+	name := strings.ToLower(strings.Trim(req.Name, "."))
+	z, err := s.Store.EnsureZone(r.Context(), core.Zone{Name: name, Profile: req.Profile, WildcardMode: true})
+	if err != nil {
+		writeErr(w, 500, "internal", err.Error())
+		return
+	}
+	writeJSON(w, 201, z)
 }
 
 func (s *Server) handleAvailability(w http.ResponseWriter, r *http.Request) {

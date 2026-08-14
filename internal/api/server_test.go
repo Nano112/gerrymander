@@ -70,6 +70,24 @@ func TestAuthRequired(t *testing.T) {
 	}
 }
 
+func TestZoneCreation(t *testing.T) {
+	ts := testServer(t, "")
+	resp, body := doJSON(t, "POST", ts.URL+"/v1/zones", "", `{"name":"Coolwebsite.Test."}`)
+	if resp.StatusCode != 201 || body["name"] != "coolwebsite.test" || body["profile"] != "dev" {
+		t.Fatalf("create zone: %d %v", resp.StatusCode, body)
+	}
+	// idempotent, keeps original profile
+	resp, body = doJSON(t, "POST", ts.URL+"/v1/zones", "", `{"name":"coolwebsite.test","profile":"prod"}`)
+	if resp.StatusCode != 201 || body["profile"] != "dev" {
+		t.Fatalf("re-create zone: %d %v", resp.StatusCode, body)
+	}
+	// claimable immediately
+	resp, _ = doJSON(t, "POST", ts.URL+"/v1/claims", "", `{"zone":"coolwebsite.test","label":"api","kind":"platform"}`)
+	if resp.StatusCode != 201 {
+		t.Fatalf("claim in new zone: %d", resp.StatusCode)
+	}
+}
+
 func TestClaimFlow(t *testing.T) {
 	ts := testServer(t, "")
 

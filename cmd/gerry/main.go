@@ -54,6 +54,8 @@ func main() {
 		err = cmdRelease(args)
 	case "rename":
 		err = cmdRename(args)
+	case "zone":
+		err = cmdZone(args)
 	case "conflicts":
 		err = cmdConflicts(args)
 	case "up":
@@ -87,7 +89,8 @@ server:
 
 client (env: GERRY_API, GERRY_API_KEY):
   claim  --zone Z --label L [--owner O] [--kind tenant|platform] [--hold]
-  port   --owner O [--pool dev]
+  port   --owner O [--pool dev] [-q]
+  zone   add --name Z [--profile dev|prod]
   avail  --zone Z --label L
   ls     [--zone Z] [--owner O]
   release --id N
@@ -266,9 +269,30 @@ func cmdPort(args []string) error {
 	fs := flag.NewFlagSet("port", flag.ExitOnError)
 	owner := fs.String("owner", "", "owner_ref")
 	pool := fs.String("pool", "dev", "pool")
+	quiet := fs.Bool("q", false, "print only the port number (for scripts)")
 	fs.Parse(args)
 	var out map[string]any
 	if err := apiClient().Do(context.Background(), "POST", "/v1/ports", map[string]any{"pool": *pool, "owner_ref": *owner}, &out); err != nil {
+		return err
+	}
+	if *quiet {
+		fmt.Println(int(out["value"].(float64)))
+		return nil
+	}
+	printJSON(out)
+	return nil
+}
+
+func cmdZone(args []string) error {
+	if len(args) < 1 || args[0] != "add" {
+		return fmt.Errorf("usage: gerry zone add --name Z [--profile dev|prod]")
+	}
+	fs := flag.NewFlagSet("zone add", flag.ExitOnError)
+	name := fs.String("name", "", "zone name")
+	profile := fs.String("profile", "dev", "profile")
+	fs.Parse(args[1:])
+	var out map[string]any
+	if err := apiClient().Do(context.Background(), "POST", "/v1/zones", map[string]any{"name": *name, "profile": *profile}, &out); err != nil {
 		return err
 	}
 	printJSON(out)
@@ -353,6 +377,11 @@ func cmdUp(args []string) error {
 	}
 	c := apiClient()
 	ctx := context.Background()
+	// A project manifest introducing a fresh dev zone shouldn't require a
+	// daemon config edit — ensure it exists (idempotent).
+	if err := c.Do(ctx, "POST", "/v1/zones", map[string]any{"name": m.Zone, "profile": "dev"}, nil); err != nil {
+		return fmt.Errorf("ensure zone %s: %w", m.Zone, err)
+	}
 	resolvePort := func(pool, ownerRef string) (int, error) {
 		var out core.PortAllocation
 		if err := c.Do(ctx, "POST", "/v1/ports", map[string]any{"pool": pool, "owner_ref": ownerRef}, &out); err != nil {
