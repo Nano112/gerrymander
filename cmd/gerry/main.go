@@ -30,6 +30,7 @@ import (
 	"github.com/Nano112/gerrymander/internal/config"
 	"github.com/Nano112/gerrymander/internal/core"
 	"github.com/Nano112/gerrymander/internal/dnsserver"
+	"github.com/Nano112/gerrymander/internal/dockerlabels"
 	"github.com/Nano112/gerrymander/internal/dockerrelay"
 	"github.com/Nano112/gerrymander/internal/k8slite"
 	"github.com/Nano112/gerrymander/internal/manifest"
@@ -292,6 +293,15 @@ func cmdServe(args []string) error {
 		// mode); enabled opportunistically.
 		if _, err := exec.LookPath("docker"); err == nil {
 			p.SetDockerResolver(dockerrelay.NewManager(ports))
+			// Compose-label auto-claim: containers labeled
+			// gerrymander.hostname get a route for the container's life.
+			if e := cfg.DockerLabels.Enabled; e == nil || *e {
+				dw := &dockerlabels.Watcher{
+					Store: st, Alloc: alloc, Interval: cfg.DockerLabels.Interval,
+					Log: log, OnMutation: p.RequestRebuild,
+				}
+				go dw.Run(ctx)
+			}
 		}
 		go func() {
 			// A busy port must degrade the proxy, not kill the daemon:

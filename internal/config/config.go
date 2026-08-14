@@ -39,6 +39,13 @@ type Config struct {
 		Zones   []string `yaml:"zones"`  // TLDs or zones to answer for
 	} `yaml:"dns"`
 	Supervise bool `yaml:"supervise"`
+	// DockerLabels auto-claims hostnames for containers labeled
+	// gerrymander.hostname=... (compose-label pattern). nil = auto: on
+	// whenever the proxy runs and the docker CLI is present.
+	DockerLabels struct {
+		Enabled  *bool         `yaml:"enabled"`
+		Interval time.Duration `yaml:"interval"` // default 5s
+	} `yaml:"docker_labels"`
 	Observer  struct {
 		Enabled      bool          `yaml:"enabled"`
 		Zones        []string      `yaml:"zones"`
