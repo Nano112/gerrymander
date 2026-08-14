@@ -1,0 +1,61 @@
+# Wire gerry into kube-prometheus-stack: scrape the registry's metrics and
+# alert when the observer finds trouble. The conflicts gauge is the whole
+# point of registry mode — without these rules it's a watchdog nobody hears.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: gerrymander
+  namespace: gerrymander
+  labels:
+    app: gerrymander
+spec:
+  selector:
+    matchLabels:
+      app: gerrymander
+  endpoints:
+    - port: api
+      path: /metrics
+      interval: 60s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: gerrymander
+  namespace: gerrymander
+  labels:
+    app: gerrymander
+spec:
+  groups:
+    - name: gerrymander
+      rules:
+        - alert: GerrymanderHostnameConflict
+          expr: max by (zone) (gerry_conflicts) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "hostname conflict in zone {{ $labels.zone }}"
+            description: >-
+              The gerry observer found {{ $value }} routing conflict(s) in
+              {{ $labels.zone }} (kind-mismatch, duplicate-route, or a
+              shadowed host). See /v1/conflicts on the registry API.
+        - alert: GerrymanderUnregisteredHosts
+          expr: max by (zone) (gerry_unregistered_observed_hosts) > 0
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "unregistered hostnames observed in {{ $labels.zone }}"
+            description: >-
+              Cluster routes serve hostnames that have no registry
+              allocation (auto-register is off, or it failed).
+        - alert: GerrymanderDown
+          expr: absent(up{job="gerrymander"}) or up{job="gerrymander"} == 0
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "gerrymander registry is not being scraped / is down"
+            description: >-
+              The hostname registry is unreachable — availability checks and
+              conflict detection are blind until it returns.

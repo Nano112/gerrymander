@@ -42,6 +42,15 @@ type Config struct {
 		CAFile       string        `yaml:"ca_file"`
 		Insecure     bool          `yaml:"insecure"`
 	} `yaml:"observer"`
+	// Actuator writes Traefik IngressRoutes for registry claims that carry
+	// service backends. Off by default; it shares the observer's cluster
+	// credentials.
+	Actuator struct {
+		Enabled     bool          `yaml:"enabled"`
+		Zones       []string      `yaml:"zones"`
+		EntryPoints []string      `yaml:"entry_points"`
+		Interval    time.Duration `yaml:"interval"`
+	} `yaml:"actuator"`
 	Ports struct {
 		EnsureDefaultPool bool `yaml:"ensure_default_pool"`
 	} `yaml:"ports"`

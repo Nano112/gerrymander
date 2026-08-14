@@ -20,6 +20,10 @@ rules:
   - apiGroups: ["traefik.io"]
     resources: ["ingressroutes"]
     verbs: ["get", "list", "watch"]
+    # If you enable the actuator (writes IngressRoutes for registry claims),
+    # widen this rule to:
+    #   verbs: ["get", "list", "watch", "create", "update", "delete"]
+    # The actuator only ever mutates routes labeled app.gerrymander/managed=true.
   - apiGroups: ["networking.k8s.io"]
     resources: ["ingresses"]
     verbs: ["get", "list", "watch"]
@@ -70,6 +74,13 @@ data:
       zones: [example.com]
       auto_register: true
       interval: 60s
+    # Write-side (off by default): materialize IngressRoutes for allocations
+    # whose spec carries a `service` backend. Requires the wider RBAC above.
+    # actuator:
+    #   enabled: true
+    #   zones: [example.com]
+    #   entry_points: [websecure]
+    #   interval: 60s
     ports:
       ensure_default_pool: false
     hold_ttl: 30m
@@ -123,6 +134,8 @@ kind: Service
 metadata:
   name: gerrymander
   namespace: gerrymander
+  labels:
+    app: gerrymander # ServiceMonitor selector matches SERVICE labels
 spec:
   selector: { app: gerrymander }
   ports:

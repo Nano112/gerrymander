@@ -22,12 +22,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Nano112/gerrymander/internal/actuate"
 	"github.com/Nano112/gerrymander/internal/api"
 	"github.com/Nano112/gerrymander/internal/client"
 	"github.com/Nano112/gerrymander/internal/config"
 	"github.com/Nano112/gerrymander/internal/core"
 	"github.com/Nano112/gerrymander/internal/dnsserver"
 	"github.com/Nano112/gerrymander/internal/dockerrelay"
+	"github.com/Nano112/gerrymander/internal/k8slite"
 	"github.com/Nano112/gerrymander/internal/manifest"
 	"github.com/Nano112/gerrymander/internal/mcp"
 	"github.com/Nano112/gerrymander/internal/observe"
@@ -215,6 +217,24 @@ func cmdServe(args []string) error {
 			AutoRegister: cfg.Observer.AutoRegister, Interval: cfg.Observer.Interval, Log: log,
 		}
 		go obs.Run(ctx)
+	}
+
+	if cfg.Actuator.Enabled {
+		k8s := k8slite.Config{APIServer: cfg.Observer.APIServer, TokenFile: cfg.Observer.TokenFile, CAFile: cfg.Observer.CAFile, Insecure: cfg.Observer.Insecure}
+		if k8s.APIServer == "" {
+			if k8s, err = k8slite.InCluster(); err != nil {
+				return fmt.Errorf("actuator enabled but no cluster config: %w", err)
+			}
+		}
+		kc, err := k8slite.New(k8s)
+		if err != nil {
+			return fmt.Errorf("actuator client: %w", err)
+		}
+		act := &actuate.Actuator{
+			Store: st, Client: kc, Zones: cfg.Actuator.Zones,
+			EntryPoints: cfg.Actuator.EntryPoints, Interval: cfg.Actuator.Interval, Log: log,
+		}
+		go act.Run(ctx)
 	}
 
 	srv := &api.Server{Store: st, Alloc: alloc, Ports: ports, APIKey: os.Getenv(cfg.API.KeyEnv), Log: log}
