@@ -4,6 +4,12 @@
   <img src="docs/assets/gerry.png" alt="the gerrymander gopher drawing districts" width="520">
 </p>
 
+<p align="center">
+  <a href="https://www.npmjs.com/package/gerrymander-vite"><img src="https://img.shields.io/npm/v/gerrymander-vite?label=gerrymander-vite&color=8f6fe0" alt="npm"></a>
+  <a href="https://github.com/Nano112/gerrymander/releases"><img src="https://img.shields.io/github/v/release/Nano112/gerrymander?color=7fa653" alt="release"></a>
+  <img src="https://img.shields.io/badge/license-MIT-e8dcbb" alt="MIT">
+</p>
+
 **A hostname and port control plane** — one authority for *who owns which
 hostname* in a wildcard zone, and *which process owns which port* on a dev
 machine. The same binary, model, and CLI run on a laptop and in production.
