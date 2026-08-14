@@ -12,3 +12,6 @@ services:
   api:
     hostnames: [backend.coolwebsite.test]
     port_pool: dev
+    # `gerry dev api` (from this directory) applies the manifest, grants
+    # the sticky port, and runs this — python set-and-forget.
+    dev: cd backend && uv run uvicorn main:app --host 127.0.0.1 --port {PORT} --reload

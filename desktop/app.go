@@ -441,6 +441,11 @@ func (a *App) GetMap() (MapData, error) {
 				cmd = cmd[:31] + "…"
 			}
 			mb = MapBackend{ID: "supervised:" + b.Supervised.Cmd, Kind: "supervised", Name: "supervised", Sub: cmd}
+		case b.Kind == "docker" && b.Docker != nil:
+			mb = MapBackend{
+				ID:   fmt.Sprintf("docker:%s/%s:%d", b.Docker.Network, b.Docker.Host, b.Docker.Port),
+				Kind: "docker", Name: b.Docker.Host, Sub: fmt.Sprintf("%s · :%d", b.Docker.Network, b.Docker.Port),
+			}
 		case b.Kind == "service" && b.Service != nil:
 			mb = MapBackend{
 				ID:   fmt.Sprintf("svc:%s/%s:%d", b.Service.Namespace, b.Service.Name, b.Service.Port),

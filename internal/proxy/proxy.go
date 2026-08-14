@@ -25,6 +25,13 @@ type Starter interface {
 	Ensure(ctx context.Context, alloc core.Allocation, b *core.SupervisedBackend) (string, error)
 }
 
+// DockerResolver resolves docker backends to host addresses, maintaining
+// relay containers as needed. Implemented by dockerrelay.Manager; nil
+// disables docker backends.
+type DockerResolver interface {
+	Ensure(ctx context.Context, d core.DockerBackend) (string, error)
+}
+
 // Options configure the proxy.
 type Options struct {
 	// HTTPAddr serves the redirect listener ("" disables), e.g. ":80".
@@ -45,6 +52,7 @@ type Proxy struct {
 	ca      *CA
 	table   *Table
 	starter Starter
+	docker  DockerResolver
 	opts    Options
 }
 
@@ -58,6 +66,9 @@ func New(st *store.Store, ca *CA, starter Starter, opts Options) *Proxy {
 	}
 	return &Proxy{store: st, ca: ca, table: &Table{}, starter: starter, opts: opts}
 }
+
+// SetDockerResolver enables docker relay backends.
+func (p *Proxy) SetDockerResolver(d DockerResolver) { p.docker = d }
 
 // Table exposes the route table (tests, diagnostics).
 func (p *Proxy) Table() *Table { return p.table }
@@ -159,6 +170,8 @@ func describeBackend(t Target) string {
 		return fmt.Sprintf("http://%s:%d", b.Address.Host, b.Address.Port)
 	case b.Kind == "supervised" && b.Supervised != nil:
 		return "supervised: " + b.Supervised.Cmd
+	case b.Kind == "docker" && b.Docker != nil:
+		return fmt.Sprintf("docker %s/%s:%d", b.Docker.Network, b.Docker.Host, b.Docker.Port)
 	default:
 		return b.Kind
 	}
@@ -191,6 +204,18 @@ func (p *Proxy) upstreamFor(ctx context.Context, t Target) (*url.URL, error) {
 			return nil, fmt.Errorf("supervised backend missing spec")
 		}
 		addr, err := p.starter.Ensure(ctx, t.Alloc, b.Supervised)
+		if err != nil {
+			return nil, err
+		}
+		return &url.URL{Scheme: "http", Host: addr}, nil
+	case "docker":
+		if p.docker == nil {
+			return nil, fmt.Errorf("docker backend but no docker resolver (is the docker CLI available?)")
+		}
+		if b.Docker == nil {
+			return nil, fmt.Errorf("docker backend missing spec")
+		}
+		addr, err := p.docker.Ensure(ctx, *b.Docker)
 		if err != nil {
 			return nil, err
 		}

@@ -32,10 +32,16 @@ type Service struct {
 	Address    string          `yaml:"address,omitempty"`
 	PortPool   string          `yaml:"port_pool,omitempty"`
 	Supervised *SupervisedSpec `yaml:"supervised,omitempty"`
+	Docker     *DockerSpec     `yaml:"docker,omitempty"`
 	// Routes declares per-listener backends when one hostname serves
 	// different upstreams on different ports (e.g. app on 443, Vite HMR
 	// on :5175).
 	Routes []RouteSpec `yaml:"routes,omitempty"`
+	// Dev is the command `gerry dev <service>` runs for this service, with
+	// {PORT} substituted by the service's sticky port. It makes any
+	// runtime set-and-forget: manifest applied, port granted, command
+	// exec'd — no owner strings, no wrapper scripts.
+	Dev string `yaml:"dev,omitempty"`
 }
 
 // RouteSpec is one listener→backend binding inside a service.
@@ -44,6 +50,15 @@ type RouteSpec struct {
 	Address    string          `yaml:"address,omitempty"`
 	PortPool   string          `yaml:"port_pool,omitempty"`
 	Supervised *SupervisedSpec `yaml:"supervised,omitempty"`
+	Docker     *DockerSpec     `yaml:"docker,omitempty"`
+}
+
+// DockerSpec targets an unpublished container: gerry maintains a relay on
+// its network. "host" is the container name or network alias.
+type DockerSpec struct {
+	Network string `yaml:"network"`
+	Host    string `yaml:"host"`
+	Port    int    `yaml:"port"`
 }
 
 // SupervisedSpec mirrors core.SupervisedBackend in YAML.
@@ -97,6 +112,9 @@ func Parse(b []byte, path string) (*Manifest, error) {
 		if svc.PortPool != "" && svc.Address == "" && svc.Supervised == nil {
 			n++
 		}
+		if svc.Docker != nil {
+			n++
+		}
 		if len(svc.Routes) > 0 {
 			if n != 0 {
 				return nil, fmt.Errorf("%s: service %q mixes routes with a shorthand backend", path, name)
@@ -109,7 +127,10 @@ func Parse(b []byte, path string) (*Manifest, error) {
 				if r.Supervised != nil {
 					rn++
 				}
-				if r.PortPool != "" && r.Address == "" && r.Supervised == nil {
+				if r.Docker != nil {
+					rn++
+				}
+				if r.PortPool != "" && r.Address == "" && r.Supervised == nil && r.Docker == nil {
 					rn++
 				}
 				if rn != 1 {
@@ -117,7 +138,7 @@ func Parse(b []byte, path string) (*Manifest, error) {
 				}
 			}
 		} else if n != 1 {
-			return nil, fmt.Errorf("%s: service %q needs exactly one backend (address | supervised | port_pool | routes)", path, name)
+			return nil, fmt.Errorf("%s: service %q needs exactly one backend (address | supervised | port_pool | docker | routes)", path, name)
 		}
 	}
 	return &m, nil
@@ -145,14 +166,14 @@ func (m *Manifest) Claims(resolvePort func(pool, ownerRef string) (int, error)) 
 		var routes []core.Route
 		if len(svc.Routes) > 0 {
 			for i, rs := range svc.Routes {
-				backend, err := backendFrom(fmt.Sprintf("%s route %d", name, i), rs.Address, rs.PortPool, rs.Supervised, ownerRef, resolvePort)
+				backend, err := backendFrom(fmt.Sprintf("%s route %d", name, i), rs.Address, rs.PortPool, rs.Supervised, rs.Docker, ownerRef, resolvePort)
 				if err != nil {
 					return nil, err
 				}
 				routes = append(routes, core.Route{Listen: rs.Listen, Backend: backend})
 			}
 		} else {
-			backend, err := backendFrom(name, svc.Address, svc.PortPool, svc.Supervised, ownerRef, resolvePort)
+			backend, err := backendFrom(name, svc.Address, svc.PortPool, svc.Supervised, svc.Docker, ownerRef, resolvePort)
 			if err != nil {
 				return nil, err
 			}
@@ -206,8 +227,10 @@ func (m *Manifest) Claims(resolvePort func(pool, ownerRef string) (int, error)) 
 	return out, nil
 }
 
-func backendFrom(name, address, portPool string, sup *SupervisedSpec, ownerRef string, resolvePort func(pool, ownerRef string) (int, error)) (core.Backend, error) {
+func backendFrom(name, address, portPool string, sup *SupervisedSpec, dock *DockerSpec, ownerRef string, resolvePort func(pool, ownerRef string) (int, error)) (core.Backend, error) {
 	switch {
+	case dock != nil:
+		return core.Backend{Kind: "docker", Docker: &core.DockerBackend{Network: dock.Network, Host: dock.Host, Port: dock.Port}}, nil
 	case address != "":
 		host, port, err := splitAddr(address)
 		if err != nil {

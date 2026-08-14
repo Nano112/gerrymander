@@ -22,13 +22,40 @@ export default defineConfig({ plugins: [react(), gerrymander()] });
 `bun run dev` / `npm run dev` is the whole workflow. Verified end-to-end in
 `examples/coolwebsite` (bun runtime, HMR over wss, rename-and-prune).
 
-## ✅ FastAPI / uvicorn — gerry run
+## ✅ Python (FastAPI / Django / Flask) — gerry dev
 
-```sh
-gerry run --owner myproj/api -- uv run uvicorn main:app --port '{PORT}' --reload
+Declare the command in the manifest and the whole workflow is one word:
+
+```yaml
+services:
+  api:
+    hostnames: [api.myproj.test]
+    port_pool: dev
+    dev: uv run uvicorn main:app --port {PORT} --reload
 ```
-Remember CORS when the frontend lives on a sibling hostname — see the
+```sh
+gerry dev api    # applies the manifest, grants the sticky port, runs it
+```
+`gerry run --owner myproj/api -- CMD --port '{PORT}'` remains the ad-hoc
+form. Remember CORS when the frontend lives on a sibling hostname — see the
 example's `backend/main.py`.
+
+## ✅ Dockerized apps — docker backend (auto-relay)
+
+A container that publishes **no ports** can still be a backend: gerry keeps
+a tiny socat relay on its network, publishing a sticky loopback port on
+demand. Zero compose edits.
+
+```yaml
+services:
+  app:
+    hostnames: [myproj.test, "*.myproj.test"]
+    docker: { network: myproj_default, host: laravel.test, port: 80 }
+```
+Verified live: an unpublished `nginx:alpine` served over TLS through the
+proxy, relay auto-created on first request (`docker ps` shows it as
+`gerry-relay-*`, labeled `app.gerrymander.relay`). Needs the docker CLI on
+the daemon's host; first use pulls `alpine/socat`.
 
 ## ✅ Bun runtime — either
 

@@ -23,6 +23,7 @@ import (
 	"github.com/Nano112/gerrymander/internal/config"
 	"github.com/Nano112/gerrymander/internal/core"
 	"github.com/Nano112/gerrymander/internal/dnsserver"
+	"github.com/Nano112/gerrymander/internal/dockerrelay"
 	"github.com/Nano112/gerrymander/internal/manifest"
 	"github.com/Nano112/gerrymander/internal/mcp"
 	"github.com/Nano112/gerrymander/internal/observe"
@@ -60,6 +61,8 @@ func main() {
 		err = cmdZone(args)
 	case "run":
 		err = cmdRun(args)
+	case "dev":
+		err = cmdDev(args)
 	case "init":
 		err = cmdInit(args)
 	case "status", "doctor":
@@ -104,6 +107,9 @@ client (env: GERRY_API, GERRY_API_KEY):
   run    --owner O [--pool dev] -- CMD [args…]
          claims O's sticky port, then runs CMD with PORT set and any
          literal {PORT} in the args replaced (e.g. vite --port {PORT})
+  dev    [service] [-f gerrymander.yaml]
+         set-and-forget for any runtime: applies the manifest, grants the
+         service's sticky port, and runs its manifest-declared dev: command
   avail  --zone Z --label L
   ls     [--zone Z] [--owner O]
   release --id N
@@ -235,6 +241,11 @@ func cmdServe(args []string) error {
 			HTTPAddr: cfg.Proxy.HTTP, TLSAddr: cfg.Proxy.TLS,
 			ExtraTLSPorts: cfg.Proxy.ExtraTLSPorts, Log: log,
 		})
+		// Docker relay backends need the docker CLI on this host (host
+		// mode); enabled opportunistically.
+		if _, err := exec.LookPath("docker"); err == nil {
+			p.SetDockerResolver(dockerrelay.NewManager(ports))
+		}
 		go func() {
 			if err := p.Run(ctx); err != nil && ctx.Err() == nil {
 				log.Error("proxy exited", "err", err)
@@ -378,6 +389,101 @@ func cmdConflicts(args []string) error {
 		return err
 	}
 	printJSON(out)
+	return nil
+}
+
+// --- dev ---
+
+// cmdDev is `bun run dev` for everything that isn't vite: apply the
+// manifest, resolve the service's sticky port, exec its dev: command.
+func cmdDev(args []string) error {
+	fs := flag.NewFlagSet("dev", flag.ExitOnError)
+	file := fs.String("f", "gerrymander.yaml", "manifest file")
+	fs.Parse(args)
+	m, err := manifest.Load(*file)
+	if err != nil {
+		return err
+	}
+
+	// pick the service: explicit arg > only one with dev: > error
+	var name string
+	if fs.NArg() > 0 {
+		name = fs.Arg(0)
+		if _, ok := m.Services[name]; !ok {
+			return fmt.Errorf("service %q not in %s", name, *file)
+		}
+	} else {
+		var withDev []string
+		for n, s := range m.Services {
+			if s.Dev != "" {
+				withDev = append(withDev, n)
+			}
+		}
+		switch len(withDev) {
+		case 1:
+			name = withDev[0]
+		case 0:
+			return fmt.Errorf("no service in %s declares a dev: command", *file)
+		default:
+			return fmt.Errorf("several services declare dev: (%s) — pick one: gerry dev <service>", strings.Join(withDev, ", "))
+		}
+	}
+	svc := m.Services[name]
+	if svc.Dev == "" {
+		return fmt.Errorf("service %q has no dev: command in %s", name, *file)
+	}
+
+	// Apply the whole manifest (idempotent) so hostnames route before the
+	// process starts, then run the command on the service's sticky port.
+	c := apiClient()
+	ctx := context.Background()
+	yamlBytes, err := os.ReadFile(*file)
+	if err != nil {
+		return err
+	}
+	var applied struct {
+		Services map[string]struct {
+			Hostnames []string `json:"hostnames"`
+			Port      int      `json:"port"`
+		} `json:"services"`
+		Pruned []string `json:"pruned"`
+	}
+	if err := c.Do(ctx, "POST", "/v1/manifest/apply", map[string]any{"yaml": string(yamlBytes)}, &applied); err != nil {
+		return fmt.Errorf("apply %s: %w", *file, err)
+	}
+	for _, p := range applied.Pruned {
+		fmt.Fprintf(os.Stderr, "gerry: released %s (left the manifest)\n", p)
+	}
+
+	ownerRef := m.Project + "/" + name
+	port := applied.Services[name].Port
+	if port == 0 {
+		var pa core.PortAllocation
+		if err := c.Do(ctx, "POST", "/v1/ports", map[string]any{"pool": "dev", "owner_ref": ownerRef}, &pa); err != nil {
+			return err
+		}
+		port = pa.Value
+	}
+	if hosts := applied.Services[name].Hostnames; len(hosts) > 0 {
+		fmt.Fprintf(os.Stderr, "gerry: https://%s → :%d\n", hosts[0], port)
+	} else {
+		fmt.Fprintf(os.Stderr, "gerry: %s → port %d\n", ownerRef, port)
+	}
+
+	cmdline := strings.ReplaceAll(svc.Dev, "{PORT}", strconv.Itoa(port))
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		shell = "/bin/sh"
+	}
+	cmd := exec.Command(shell, "-c", cmdline)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	cmd.Env = append(os.Environ(), "PORT="+strconv.Itoa(port), "GERRY_PORT="+strconv.Itoa(port))
+	if err := cmd.Run(); err != nil {
+		if ee, ok := err.(*exec.ExitError); ok {
+			os.Exit(ee.ExitCode())
+		}
+		return err
+	}
 	return nil
 }
 

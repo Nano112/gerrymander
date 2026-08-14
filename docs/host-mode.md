@@ -27,10 +27,13 @@ Validated lifecycle (2026-08-14, uvicorn behind a host proxy):
 The container and host daemons want the same ports (80/443/517x/4780), so
 this is a swap, not a coexistence:
 
-1. **Backends must be reachable from the host.** Container-mode manifests
-   reach docker-network aliases (`my-app:80`); host mode cannot. Every
-   such backend needs a published port and a manifest edit to
-   `127.0.0.1:<published>` — or a move to `supervised:`. Do this first.
+1. **Convert docker-alias backends.** Container-mode manifests reach
+   docker-network aliases (`address: my-app:80`); a host daemon cannot dial
+   those directly. Change each to the `docker:` backend form —
+   `docker: { network: <net>, host: my-app, port: 80 }` — and gerry
+   maintains a socat relay on that network automatically (no compose
+   edits, no published ports). Host processes use `address:`/`supervised:`
+   as usual.
 2. Copy the CA so browser trust survives:
    `cp deploy/dev/data/ca/* ~/.gerrymander/ca/`
 3. Copy or re-seed the registry: either move the SQLite file from the

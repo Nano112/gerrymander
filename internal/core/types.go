@@ -84,6 +84,16 @@ type AddressBackend struct {
 	PreserveHost bool `json:"preserve_host,omitempty"`
 }
 
+// DockerBackend targets a container on a docker network that publishes no
+// ports. The proxy reaches it through a managed socat relay container on the
+// same network — so a host-mode gerry serves dockerized apps with zero
+// compose edits.
+type DockerBackend struct {
+	Network string `json:"network"`
+	Host    string `json:"host"` // container name or network alias
+	Port    int    `json:"port"`
+}
+
 // SupervisedBackend is a process gerry starts on demand and sleeps when idle.
 type SupervisedBackend struct {
 	Cmd         string            `json:"cmd"`
@@ -102,10 +112,11 @@ type HealthCheck struct {
 
 // Backend is what an allocation points at. Exactly one field is set.
 type Backend struct {
-	Kind       string             `json:"kind"` // "service" | "address" | "supervised"
+	Kind       string             `json:"kind"` // "service" | "address" | "supervised" | "docker"
 	Service    *ServiceBackend    `json:"service,omitempty"`
 	Address    *AddressBackend    `json:"address,omitempty"`
 	Supervised *SupervisedBackend `json:"supervised,omitempty"`
+	Docker     *DockerBackend     `json:"docker,omitempty"`
 }
 
 // Route binds a listener port to a backend. An allocation carries one or
