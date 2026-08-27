@@ -3,12 +3,16 @@
 package dockerrelay
 
 import (
+	"encoding/binary"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
 	"syscall"
 )
+
+// native is the byte order the kernel writes ACL xattrs in.
+var native = binary.NativeEndian
 
 // DaemonSocketAccess reports whether the running gerry daemon can use the
 // docker socket, and why not when it cannot.
@@ -51,6 +55,23 @@ func CheckDaemonSocketAccess(pid int, socket string) DaemonSocketAccess {
 		return DaemonSocketAccess{Known: true, Allowed: true}
 	}
 
+	uid, uidErr := processUID(pid)
+	// Root can always use the socket, group or not.
+	if uidErr == nil && uid == 0 {
+		return DaemonSocketAccess{Known: true, Allowed: true}
+	}
+	// A POSIX ACL can grant a specific user access without any group at all —
+	// `setfacl -m u:someone:rw` is the usual way to unblock this without
+	// logging out. Checking only the group would then report a failure that
+	// is not one, so consult the ACL first and treat an unreadable or
+	// unparseable one as "cannot tell" rather than as a denial.
+	switch aclGrantsUser(socket, uid, uidErr == nil) {
+	case aclAllows:
+		return DaemonSocketAccess{Known: true, Allowed: true}
+	case aclUnknown:
+		return DaemonSocketAccess{}
+	}
+
 	groups, err := processGroups(pid)
 	if err != nil {
 		return DaemonSocketAccess{}
@@ -60,11 +81,6 @@ func CheckDaemonSocketAccess(pid int, socket string) DaemonSocketAccess {
 			return DaemonSocketAccess{Known: true, Allowed: true}
 		}
 	}
-	// Root can always use it, group or not.
-	if uid, err := processUID(pid); err == nil && uid == 0 {
-		return DaemonSocketAccess{Known: true, Allowed: true}
-	}
-
 	return DaemonSocketAccess{
 		Known:  true,
 		Reason: fmt.Sprintf("the daemon (pid %d) is not in group %d, which owns %s", pid, st.Gid, socket),
@@ -132,4 +148,76 @@ func processUID(pid int) (int, error) {
 		return -1, fmt.Errorf("no stat for /proc/%d", pid)
 	}
 	return int(st.Uid), nil
+}
+
+// The POSIX ACL extended attribute, as laid out in <linux/posix_acl_xattr.h>:
+// a 4-byte version header followed by 8-byte entries of {tag, perm, id}, all
+// in native byte order.
+const (
+	aclXattr      = "system.posix_acl_access"
+	aclEAVersion  = 0x0002
+	aclTagUser    = 0x02
+	aclTagMask    = 0x10
+	aclPermRead   = 0x04
+	aclPermWrite  = 0x02
+	aclEntrySize  = 8
+	aclHeaderSize = 4
+)
+
+type aclVerdict int
+
+const (
+	// aclUnknown: no ACL, or one we could not read or parse. The caller must
+	// not treat this as a denial — it is the absence of an answer.
+	aclUnknown aclVerdict = iota
+	aclAllows
+	aclSilent // an ACL exists and says nothing about this user
+)
+
+// aclGrantsUser reports whether the socket's ACL grants uid read+write,
+// applying the ACL mask the way the kernel does.
+func aclGrantsUser(path string, uid int, uidKnown bool) aclVerdict {
+	if !uidKnown {
+		return aclUnknown
+	}
+	size, err := syscall.Getxattr(path, aclXattr, nil)
+	if err != nil || size < aclHeaderSize+aclEntrySize {
+		return aclUnknown // no ACL (or no permission to read it)
+	}
+	buf := make([]byte, size)
+	n, err := syscall.Getxattr(path, aclXattr, buf)
+	if err != nil || n < aclHeaderSize {
+		return aclUnknown
+	}
+	return parseACLGrant(buf[:n], uid)
+}
+
+// parseACLGrant is the xattr-decoding half of aclGrantsUser, split out so the
+// entry walk can be tested without a filesystem that supports ACLs.
+func parseACLGrant(buf []byte, uid int) aclVerdict {
+	if len(buf) < aclHeaderSize || native.Uint32(buf) != aclEAVersion {
+		return aclUnknown
+	}
+
+	const want = aclPermRead | aclPermWrite
+	var userPerm uint16
+	var found bool
+	mask := uint16(0xffff) // no mask entry = no masking
+	for off := aclHeaderSize; off+aclEntrySize <= len(buf); off += aclEntrySize {
+		tag := native.Uint16(buf[off:])
+		perm := native.Uint16(buf[off+2:])
+		id := native.Uint32(buf[off+4:])
+		switch tag {
+		case aclTagUser:
+			if int(id) == uid {
+				userPerm, found = perm, true
+			}
+		case aclTagMask:
+			mask = perm
+		}
+	}
+	if found && userPerm&mask&want == want {
+		return aclAllows
+	}
+	return aclSilent
 }
