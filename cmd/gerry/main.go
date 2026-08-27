@@ -355,7 +355,7 @@ func cmdServe(args []string) error {
 		}
 		go func() {
 			if err := d.Run(ctx); err != nil {
-				log.Error("dns", "err", err)
+				log.Error("dns", "err", err, "fix", privilegedBindFix(err, cfg.DNS.Listen))
 			}
 		}()
 	}
@@ -403,7 +403,8 @@ func cmdServe(args []string) error {
 			// the registry API stays useful (and the doctor explains what
 			// holds the port).
 			if err := p.Run(ctx); err != nil && ctx.Err() == nil {
-				log.Error("proxy disabled", "err", err, "holder", portHolder(cfg.Proxy.TLS))
+				log.Error("proxy disabled", "err", err, "holder", portHolder(cfg.Proxy.TLS),
+					"fix", privilegedBindFix(err, cfg.Proxy.TLS))
 			}
 		}()
 	}
@@ -524,6 +525,28 @@ func dockerSentinelPort(e, defaultPort string) (string, bool) {
 		return p, true
 	}
 	return "", false
+}
+
+// privilegedBindFix names the remedy when a bind failed only because the port
+// is privileged. This is worth spelling out because the usual cause is
+// invisible: a gerry binary replaced by hand (cp, install, a manual download)
+// loses the file capability the packaged install grants it, and the daemon
+// then starts cleanly but serves nothing on 53/80/443.
+//
+// Returns "" when the error is anything else, so a busy port still reports as
+// a busy port.
+func privilegedBindFix(err error, addr string) string {
+	if err == nil || !strings.Contains(err.Error(), "permission denied") {
+		return ""
+	}
+	if runtime.GOOS != "linux" {
+		return "run the daemon with the privileges to bind " + addr
+	}
+	exe, e := os.Executable()
+	if e != nil {
+		exe = "$(command -v gerry)"
+	}
+	return "sudo setcap cap_net_bind_service=+ep " + exe + " && restart the daemon"
 }
 
 // isLoopbackListen reports whether a listen address can only be reached from

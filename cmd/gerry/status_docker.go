@@ -41,6 +41,15 @@ func dockerChecks(ctx context.Context, rep *statusReport, file string) {
 		rep.fix("%s", h.Fix)
 		return
 	}
+	// The CLI having docker access does not mean the daemon does: on Linux a
+	// --user service keeps the groups it had at login, so a fresh
+	// `usermod -aG docker` reaches this shell and not gerry. Without this the
+	// screen reports docker healthy while every relay fails.
+	if a := dockerrelay.CheckDaemonSocketAccess(dockerrelay.DaemonPID(), ""); a.Known && !a.Allowed {
+		rep.bad("the gerry daemon cannot use docker — %s", a.Reason)
+		rep.fix("%s", a.Fix)
+		return
+	}
 	rep.ok("docker %-23s reachable, relays available", h.Version)
 
 	for _, b := range backends {

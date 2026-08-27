@@ -25,6 +25,14 @@ until 1.0, minor bumps may include breaking changes (called out explicitly).
   stancl/tenancy's domains table and the registry in lockstep.
   **Breaking:** `gerrymander.api` no longer defaults to
   `http://127.0.0.1:4780` — set `GERRY_API` explicitly.
+- `gerry status` also checks whether the *daemon* can use docker, not just
+  the CLI: on Linux a `--user` service keeps the groups it had at login, so
+  a fresh `usermod -aG docker` reaches your shell and not gerry — and the
+  screen used to report docker healthy while every relay 502'd.
+- A privileged bind that fails with EPERM now logs the `setcap` fix.
+  Replacing the binary by hand drops the file capability the packaged
+  install grants, after which the daemon starts cleanly and serves nothing
+  on 53/80/443.
 - docs: Laravel Sail recipe in `docs/frameworks.md`; container
   reachability in `docs/host-mode.md`.
 
