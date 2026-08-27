@@ -33,6 +33,12 @@ until 1.0, minor bumps may include breaking changes (called out explicitly).
   `setfacl -m u:you:rw /var/run/docker.sock` unblock is recognised rather
   than reported as a failure; anything it cannot read is "cannot tell",
   never a denial.
+- `gerry status` warns when a tailnet split-DNS route sends this daemon's
+  zone to a different machine. This is the quietest failure gerry has:
+  the system resolver keeps a more specific local route, so curl and the
+  status screen reach the local daemon and pass, while browsers follow
+  the tailnet and silently land on another machine's estate — presenting
+  as a 502 or a stale page for a stack that is demonstrably up.
 - A privileged bind that fails with EPERM now logs the `setcap` fix.
   Replacing the binary by hand drops the file capability the packaged
   install grants, after which the daemon starts cleanly and serves nothing

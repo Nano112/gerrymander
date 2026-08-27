@@ -25,12 +25,27 @@ func TestServeTerminates443(t *testing.T) {
 func TestSplitDNSRoutes(t *testing.T) {
 	out := `Split DNS Routes:
   - mac-mini                       -> 100.71.144.24
+  - test                           -> 100.103.181.67
   - ts.net.                        -> 199.247.155.53
 
 Search Domains:
 `
 	r := splitDNSRoutes(out)
-	if !r["mac-mini"] || !r["ts.net"] || r["test"] {
+	if _, ok := r["mac-mini"]; !ok {
 		t.Fatalf("routes parsed wrong: %v", r)
+	}
+	if _, ok := r["ts.net"]; !ok {
+		t.Fatalf("trailing dot not trimmed: %v", r)
+	}
+	if _, ok := r["nope"]; ok {
+		t.Fatalf("invented a route: %v", r)
+	}
+	// The target is what makes a hijacked zone diagnosable.
+	if r["test"] != "100.103.181.67" {
+		t.Fatalf("target not captured: %q", r["test"])
+	}
+	// Nothing outside the section, and no bare-domain entries without one.
+	if len(r) != 3 {
+		t.Fatalf("expected 3 routes, got %d: %v", len(r), r)
 	}
 }
