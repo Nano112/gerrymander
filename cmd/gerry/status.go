@@ -111,6 +111,10 @@ func cmdStatus(args []string) error {
 		rep.fix("if pages fail only in the browser, quit/pause the proxy app (its stale sockets outlive daemon restarts)")
 	}
 
+	// Docker backends declared by the manifest here (if any): daemon access,
+	// network, container alias. Silent for projects that use none.
+	dockerChecks(ctx, rep, "gerrymander.yaml")
+
 	// 3. DNS + proxy + trust per dev zone (probe one representative host).
 	probed := false
 	for _, z := range zones.Zones {

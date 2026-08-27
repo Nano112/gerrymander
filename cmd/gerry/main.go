@@ -314,6 +314,10 @@ func cmdServe(args []string) error {
 	if apiKey == "" && !isLoopbackListen(cfg.API.Listen) && !cfg.API.AllowUnauthenticated {
 		return fmt.Errorf("api.listen %s is reachable off-host but %s is empty — refusing to serve an open registry (set the key, bind to 127.0.0.1, or set api.allow_unauthenticated: true)", cfg.API.Listen, cfg.API.KeyEnv)
 	}
+	extraListen, err := resolveExtraListen(ctx, cfg.API.ExtraListen, cfg.API.Listen, apiKey, cfg.API.AllowUnauthenticated, cfg.API.KeyEnv, log)
+	if err != nil {
+		return err
+	}
 	srv := &api.Server{Store: st, Alloc: alloc, Ports: ports, APIKey: apiKey, Log: log,
 		HideMetrics: cfg.API.MetricsListen != ""}
 	if cfg.DNS.Enabled {
@@ -416,12 +420,30 @@ func cmdServe(args []string) error {
 	}
 
 	httpSrv := &http.Server{Addr: cfg.API.Listen, Handler: srv.Handler()}
+	extraSrvs := make([]*http.Server, 0, len(extraListen))
+	for _, addr := range extraListen {
+		extraSrvs = append(extraSrvs, &http.Server{Addr: addr, Handler: srv.Handler()})
+	}
 	go func() {
 		<-ctx.Done()
 		sc, c2 := context.WithTimeout(context.Background(), 5*time.Second)
 		defer c2()
 		httpSrv.Shutdown(sc)
+		for _, es := range extraSrvs {
+			es.Shutdown(sc)
+		}
 	}()
+	// Extra listeners are conveniences, never the reason to fail to start:
+	// a docker gateway can disappear when a network is pruned, and the
+	// primary listener still serves every host-side client.
+	for _, es := range extraSrvs {
+		go func(es *http.Server) {
+			log.Info("extra api listener", "addr", es.Addr)
+			if err := es.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Error("extra api listener", "addr", es.Addr, "err", err)
+			}
+		}(es)
+	}
 	log.Info("gerry serve", "version", version, "api", cfg.API.Listen, "db", cfg.DB,
 		"proxy", cfg.Proxy.Enabled, "dns", cfg.DNS.Enabled, "observer", cfg.Observer.Enabled, "supervise", cfg.Supervise)
 	if err := httpSrv.ListenAndServe(); err != http.ErrServerClosed {
@@ -438,6 +460,72 @@ func cmdServe(args []string) error {
 
 // portHolder best-effort identifies what listens on an addr ("host:port")
 // so bind-conflict errors name the culprit instead of shrugging.
+// resolveExtraListen expands api.extra_listen into concrete addresses.
+//
+// The "@docker" sentinel is the whole point of the setting: an app inside a
+// container cannot reach a registry bound to 127.0.0.1, and the obvious fix
+// — binding 0.0.0.0 — publishes the registry to the LAN. Expanding to the
+// docker bridge gateways instead gives containers exactly the address they
+// already know as host.docker.internal and nothing more; those subnets are
+// not routed off-host, so the listener stays as private as loopback.
+//
+// A literal address here is held to the same rule as api.listen: off-host
+// and keyless is refused.
+func resolveExtraListen(ctx context.Context, entries []string, listen, apiKey string, allowUnauth bool, keyEnv string, log *slog.Logger) ([]string, error) {
+	defaultPort := "4780"
+	if _, p, err := net.SplitHostPort(listen); err == nil && p != "" {
+		defaultPort = p
+	}
+	seen := map[string]bool{}
+	var out []string
+	add := func(addr string) {
+		if addr != "" && !seen[addr] {
+			seen[addr] = true
+			out = append(out, addr)
+		}
+	}
+	for _, e := range entries {
+		e = strings.TrimSpace(e)
+		if e == "" {
+			continue
+		}
+		if port, ok := dockerSentinelPort(e, defaultPort); ok {
+			gws, err := dockerrelay.GatewayAddrs(ctx)
+			if err != nil {
+				// No docker, no gateways — the container case cannot arise,
+				// so this is a note, not a failure.
+				log.Warn("api.extra_listen @docker skipped", "err", err)
+				continue
+			}
+			if len(gws) == 0 {
+				log.Warn("api.extra_listen @docker matched no bridge networks")
+			}
+			for _, gw := range gws {
+				add(net.JoinHostPort(gw, port))
+			}
+			continue
+		}
+		if apiKey == "" && !isLoopbackListen(e) && !allowUnauth {
+			return nil, fmt.Errorf("api.extra_listen %s is reachable off-host but %s is empty — use \"@docker\" for containers, set the key, or set api.allow_unauthenticated: true", e, keyEnv)
+		}
+		add(e)
+	}
+	return out, nil
+}
+
+// dockerSentinelPort matches "@docker" and "@docker:PORT", returning the port
+// to bind on every gateway. Bare "@docker" reuses api.listen's port so the
+// registry answers on one number everywhere.
+func dockerSentinelPort(e, defaultPort string) (string, bool) {
+	if e == "@docker" {
+		return defaultPort, true
+	}
+	if p, ok := strings.CutPrefix(e, "@docker:"); ok {
+		return p, true
+	}
+	return "", false
+}
+
 // isLoopbackListen reports whether a listen address can only be reached from
 // this host. ":4780" and "0.0.0.0:…" are NOT loopback.
 func isLoopbackListen(addr string) bool {
@@ -714,9 +802,17 @@ func cmdDev(args []string) error {
 		fmt.Fprintf(os.Stderr, "gerry: released %s (left the manifest)\n", p)
 	}
 
+	// A sticky port is only meaningful when the service's backend is one gerry
+	// hands a port to. A docker- or address-backed service is reached by the
+	// proxy directly, so granting it a port would put a number in the registry
+	// that nothing ever listens on — and print a {PORT} the dev command has no
+	// use for.
 	portFor := func(name string) (int, error) {
 		if p := applied.Services[name].Port; p != 0 {
 			return p, nil
+		}
+		if !needsPort(m.Services[name]) {
+			return 0, nil
 		}
 		var pa core.PortAllocation
 		err := c.Do(ctx, "POST", "/v1/ports", map[string]any{"pool": "dev", "owner_ref": m.Project + "/" + name}, &pa)
@@ -737,11 +833,15 @@ func cmdDev(args []string) error {
 			return err
 		}
 		if hosts := applied.Services[name].Hostnames; len(hosts) > 0 {
-			fmt.Fprintf(os.Stderr, "gerry: https://%s → :%d\n", hosts[0], port)
+			if port != 0 {
+				fmt.Fprintf(os.Stderr, "gerry: https://%s → :%d\n", hosts[0], port)
+			} else {
+				fmt.Fprintf(os.Stderr, "gerry: https://%s\n", hosts[0])
+			}
 		}
-		cmd := exec.Command(shell, "-c", strings.ReplaceAll(m.Services[name].Dev, "{PORT}", strconv.Itoa(port)))
+		cmd := exec.Command(shell, shellFlag, substPort(m.Services[name].Dev, port))
 		cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-		cmd.Env = append(os.Environ(), "PORT="+strconv.Itoa(port), "GERRY_PORT="+strconv.Itoa(port))
+		cmd.Env = devEnv(port)
 		if err := cmd.Run(); err != nil {
 			if ee, ok := err.(*exec.ExitError); ok {
 				os.Exit(ee.ExitCode())
@@ -786,8 +886,8 @@ func cmdDev(args []string) error {
 		if hosts := applied.Services[name].Hostnames; len(hosts) > 0 {
 			fmt.Fprintf(os.Stderr, "%sgerry: https://%s → :%d\n", prefix, hosts[0], port)
 		}
-		cmd := exec.CommandContext(runCtx, shell, shellFlag, strings.ReplaceAll(m.Services[name].Dev, "{PORT}", strconv.Itoa(port)))
-		cmd.Env = append(os.Environ(), "PORT="+strconv.Itoa(port), "GERRY_PORT="+strconv.Itoa(port))
+		cmd := exec.CommandContext(runCtx, shell, shellFlag, substPort(m.Services[name].Dev, port))
+		cmd.Env = devEnv(port)
 		groupCommand(cmd)
 		stdout, _ := cmd.StdoutPipe()
 		stderr, _ := cmd.StderrPipe()
@@ -910,6 +1010,55 @@ func detectDevCommand() (cmd, source string) {
 }
 
 // --- manifest apply/release ---
+
+// needsPort reports whether a service's backends are the kind gerry hands a
+// port to (a pool grant or a supervised process), as opposed to ones the
+// proxy dials directly (an explicit address, or a container on a network).
+func needsPort(svc manifest.Service) bool {
+	if svc.Address != "" || svc.Docker != nil {
+		return false
+	}
+	if svc.PortPool != "" || svc.Supervised != nil {
+		return true
+	}
+	for _, r := range svc.Routes {
+		if r.PortPool != "" || r.Supervised != nil {
+			return true
+		}
+	}
+	// No backend at all is a manifest error caught at parse time; treat the
+	// remaining case (routes that are all address/docker) as portless.
+	return len(svc.Routes) == 0
+}
+
+// substPort fills {PORT} in a dev command. With no port granted the
+// placeholder is left as-is: substituting 0 would quietly bind a random port,
+// whereas a literal "{PORT}" in the failure names exactly what went wrong.
+func substPort(cmd string, port int) string {
+	if port == 0 {
+		return cmd
+	}
+	return strings.ReplaceAll(cmd, "{PORT}", strconv.Itoa(port))
+}
+
+// devEnv is the child environment for a dev command. PORT is exported only
+// when one was actually granted, and an inherited PORT is stripped otherwise:
+// a stale value from the parent shell meaning something else would be read as
+// gerry's grant by every framework that honours the convention.
+func devEnv(port int) []string {
+	env := os.Environ()
+	if port != 0 {
+		return append(env, "PORT="+strconv.Itoa(port), "GERRY_PORT="+strconv.Itoa(port))
+	}
+	out := env[:0:0]
+	for _, kv := range env {
+		if strings.HasPrefix(kv, "PORT=") || strings.HasPrefix(kv, "GERRY_PORT=") {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return out
+}
 
 func cmdUp(args []string) error {
 	fs := flag.NewFlagSet("up", flag.ExitOnError)

@@ -22,6 +22,17 @@ type Config struct {
 		// AllowUnauthenticated permits a non-loopback listen with no API key.
 		// Without it, gerry refuses to serve an open registry off-loopback.
 		AllowUnauthenticated bool `yaml:"allow_unauthenticated"`
+		// ExtraListen adds API listeners alongside Listen. The point is
+		// containers: an app in docker cannot reach a 127.0.0.1 registry, and
+		// widening Listen to 0.0.0.0 to fix that publishes it to the LAN.
+		//
+		// The literal "@docker" expands to the host's docker bridge gateway
+		// addresses — exactly the addresses containers know as
+		// host.docker.internal, and nothing else. Those subnets are not
+		// routed off-host, so they stay host-local like loopback does.
+		// Anything else here is a plain host:port and is held to the same
+		// key requirement as Listen.
+		ExtraListen []string `yaml:"extra_listen"`
 	} `yaml:"api"`
 	Zones []ZoneConfig `yaml:"zones"`
 	Proxy struct {

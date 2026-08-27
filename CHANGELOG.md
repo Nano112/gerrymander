@@ -3,6 +3,31 @@
 All notable changes to gerrymander. Versions follow [semver](https://semver.org);
 until 1.0, minor bumps may include breaking changes (called out explicitly).
 
+## Unreleased
+
+- `api.extra_listen` adds API listeners alongside `api.listen`. The
+  `@docker` sentinel expands to the host's docker bridge gateways, so
+  containers can reach the registry at `host.docker.internal` without
+  publishing it to the LAN. Literal addresses obey the existing
+  keyless-off-host refusal; the sentinel never blocks startup.
+- `gerry status` diagnoses docker backends when the working directory's
+  manifest declares any: daemon reachable *by this user* (the missing
+  docker-group case gets its own fix line), network exists, container or
+  alias resolves on it. Silent for projects that use no docker backend.
+- `gerry dev` no longer grants a sticky port to docker- or address-backed
+  services — nothing listens on it. `{PORT}` stays unsubstituted rather
+  than becoming `0`, and an inherited `PORT` is stripped from the child
+  environment instead of being mistaken for a grant.
+- `clients/laravel`: `enabled()` master switch (unset `GERRY_API` = inert,
+  so CI needs no daemon), `allocations()`/`allocationsFor()` for idempotent
+  re-claims, `update()`, `rename()`, `tenantRouteSpec()` for k8s Service
+  backends, and an opt-in `Listeners\SyncTenantDomain` that keeps
+  stancl/tenancy's domains table and the registry in lockstep.
+  **Breaking:** `gerrymander.api` no longer defaults to
+  `http://127.0.0.1:4780` — set `GERRY_API` explicitly.
+- docs: Laravel Sail recipe in `docs/frameworks.md`; container
+  reachability in `docs/host-mode.md`.
+
 ## v0.8.0 — 2026-08-15
 
 - `gerry -v/--version/-h/--help` work; the help screen is styled
