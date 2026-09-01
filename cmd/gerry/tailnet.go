@@ -67,7 +67,7 @@ func cmdTailnet(args []string) error {
 		routes := tailscaleSplitRoutes(bin)
 		missing := []string{}
 		for _, z := range dnsInfo.Zones {
-			if !routes[strings.Trim(z, ".")] {
+			if _, ok := routes[strings.Trim(z, ".")]; !ok {
 				missing = append(missing, z)
 			}
 		}
@@ -178,10 +178,10 @@ func daemonDNSInfo() *dnsInfoResp {
 	return &out
 }
 
-func tailscaleSplitRoutes(bin string) map[string]bool {
+func tailscaleSplitRoutes(bin string) map[string]string {
 	out, err := exec.Command(bin, "dns", "status").Output()
 	if err != nil {
-		return map[string]bool{}
+		return map[string]string{}
 	}
 	return splitDNSRoutes(string(out))
 }

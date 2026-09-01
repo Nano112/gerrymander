@@ -1,6 +1,6 @@
 {
     "name": "gerrymander/laravel",
-    "description": "Laravel client for gerrymander — hostname availability checks, holds, and sticky ports for multi-tenant apps",
+    "description": "Laravel client for gerrymander \u2014 hostname availability checks, holds, and sticky ports for multi-tenant apps",
     "type": "library",
     "license": "MIT",
     "require": {
@@ -18,5 +18,8 @@
                 "Gerrymander\\GerrymanderServiceProvider"
             ]
         }
+    },
+    "suggest": {
+        "stancl/tenancy": "Required only for Listeners\\SyncTenantDomain and the default --model of hostname:sync"
     }
 }

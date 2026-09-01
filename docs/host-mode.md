@@ -22,6 +22,41 @@ Validated lifecycle (2026-08-14, uvicorn behind a host proxy):
 | idle | stopped after the manifest's `idle_timeout` |
 | re-wake | 448ms on the next request, same sticky port |
 
+## Reaching the registry from inside a container
+
+A host-mode daemon binds `127.0.0.1:4780`, which no container can reach.
+Widening `api.listen` to `0.0.0.0` fixes that and publishes your registry to
+every machine on the network at the same time.
+
+`extra_listen` adds listeners without touching that decision. The `@docker`
+sentinel expands to the host's docker bridge gateway addresses — the
+addresses containers already resolve `host.docker.internal` to, and the only
+ones they can use. Docker bridge subnets are not routed off the host, so the
+result stays as private as loopback:
+
+```yaml
+api:
+  listen: 127.0.0.1:4780
+  extra_listen: ["@docker"]        # or "@docker:4781" to use another port
+```
+
+Then, from inside any container:
+
+```dotenv
+GERRY_API=http://host.docker.internal:4780
+```
+
+Notes:
+
+- Bare `@docker` reuses `api.listen`'s port, so the registry answers on one
+  number everywhere.
+- Gateways are resolved at startup. Creating a docker network afterwards
+  does not add a listener — restart the daemon (`gerry service restart`).
+- Extra listeners never block startup: if docker is absent or a network was
+  pruned, gerry logs and serves on `api.listen` alone.
+- A literal address in `extra_listen` (not the sentinel) is held to the same
+  rule as `api.listen`: off-host and keyless is refused.
+
 ## Migrating a machine from the container daemon
 
 The container and host daemons want the same ports (80/443/517x/4780), so

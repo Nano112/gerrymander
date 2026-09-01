@@ -57,6 +57,85 @@ proxy, relay auto-created on first request (`docker ps` shows it as
 `gerry-relay-*`, labeled `app.gerrymander.relay`). Needs the docker CLI on
 the daemon's host; first use pulls `alpine/socat`.
 
+## ✅ Laravel Sail: docker backend + one manifest
+
+Sail is the docker-backend case with two wrinkles: the app and its Vite dev
+server live in the *same* container on different ports, and the app itself
+wants to talk back to the registry.
+
+Give the container a stable network alias, then route both ports at it:
+
+```yaml
+# docker-compose.yml
+services:
+  laravel.test:
+    networks:
+      sail:
+      dev-proxy:            # external: true
+        aliases: [myapp]
+```
+```yaml
+# gerrymander.yaml
+project: myapp
+zone: myapp.test
+services:
+  app:
+    hostnames: [myapp.test, "*.myapp.test"]   # wildcard = tenant subdomains
+    routes:
+      - docker: { network: dev-proxy, host: myapp, port: 80 }
+      - listen: 5175
+        docker: { network: dev-proxy, host: myapp, port: 5175 }
+    dev: ./scripts/dev-stack.sh
+```
+
+**Vite over TLS without certs in the container.** Add the Vite port to
+`proxy.extra_tls_ports` and gerry terminates TLS on it, so Vite serves plain
+http and still loads as `https://` assets with working `wss://` HMR from
+every tenant subdomain:
+
+```yaml
+# ~/.gerrymander/gerry.yaml
+proxy:
+  extra_tls_ports: [5173, 5174, 5175, 5176]
+```
+```js
+// vite.config.js — no https block; gerry owns TLS
+server: {
+  host: '0.0.0.0', port: 5175, strictPort: true, cors: true,
+  origin: 'https://myapp.test:5175',
+  hmr: { host: 'myapp.test', clientPort: 5175, protocol: 'wss' },
+}
+```
+
+**Letting the app reach the registry.** A container cannot reach a registry
+bound to `127.0.0.1`, and widening `api.listen` to `0.0.0.0` publishes it to
+the LAN. `@docker` binds the docker bridge gateways instead — exactly the
+address containers already know as `host.docker.internal`, and nothing that
+routes off-host:
+
+```yaml
+# ~/.gerrymander/gerry.yaml
+api:
+  listen: 127.0.0.1:4780
+  extra_listen: ["@docker"]
+```
+```dotenv
+# .env
+GERRY_API=http://host.docker.internal:4780
+GERRY_ZONE=myapp.test
+```
+
+Now `composer require gerrymander/laravel` gives the app availability checks
+(`Gerrymander\Rules\HostnameAvailable`), a backfill command
+(`artisan hostname:sync`), and — for stancl/tenancy — a listener that claims
+and releases hostnames as domains are created and deleted. With `GERRY_API`
+unset the whole package goes inert, so CI needs no daemon. See
+[clients/laravel](https://github.com/Nano112/gerrymander/tree/main/clients/laravel).
+
+`gerry status` checks this path end to end: whether the docker daemon
+answers *this user*, whether the manifest's network exists, and whether each
+alias resolves on it — the three failures that all look like a 502.
+
 ## ✅ Bun runtime: either
 
 `bunx --bun vite` works under the plugin (verified). A native server:

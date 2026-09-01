@@ -23,6 +23,11 @@ class HostnameSyncCommand extends Command
 
     public function handle(Client $client): int
     {
+        if (! $client->enabled()) {
+            $this->error('gerrymander is not configured (GERRY_API is unset).');
+
+            return self::FAILURE;
+        }
         $zone = $this->option('zone') ?? config('gerrymander.zone');
         if (! $zone) {
             $this->error('No zone configured (GERRY_ZONE / --zone).');

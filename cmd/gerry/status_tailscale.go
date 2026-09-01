@@ -41,14 +41,34 @@ func tailscaleChecks(rep *statusReport) {
 	if err := apiClient().Do(context.Background(), "GET", "/v1/dns", nil, &dnsInfo); err != nil {
 		return
 	}
-	if !dnsInfo.Enabled || dnsInfo.Advertise == "" {
-		return // loopback-only DNS: tailnet resolution isn't expected
-	}
 	out, err := exec.Command(bin, "dns", "status").Output()
 	if err != nil {
 		return
 	}
 	routes := splitDNSRoutes(string(out))
+
+	// A split-DNS route for this zone's TLD pointing at another machine is
+	// the worst failure in this file, because nothing looks broken: the
+	// system resolver has a more specific local route, so curl and `gerry
+	// status` reach the local daemon and pass — while browsers, which follow
+	// the tailnet's DNS, silently get a different machine's estate. The
+	// symptom is a 502 or a stale page for a stack that is demonstrably up.
+	if dnsInfo.Enabled && dnsInfo.Advertise == "" {
+		self := tailscaleSelfIPs(bin)
+		for _, z := range dnsInfo.Zones {
+			target, ok := routes[strings.Trim(tld(z), ".")]
+			if !ok || target == "" || self[target] {
+				continue
+			}
+			rep.warn("the tailnet routes .%s to %s, not to this machine — browsers resolve these hostnames to that machine's gerry", strings.Trim(tld(z), "."), target)
+			rep.fix("point the route here, or remove it so every machine resolves .%s locally: Tailscale admin console → DNS → Split DNS", strings.Trim(tld(z), "."))
+			rep.fix("`tailscale dns status` shows the route; curl and this screen will keep passing while browsers do not")
+		}
+	}
+
+	if !dnsInfo.Enabled || dnsInfo.Advertise == "" {
+		return // loopback-only DNS: tailnet resolution isn't expected
+	}
 	for _, z := range dnsInfo.Zones {
 		if _, ok := routes[strings.Trim(z, ".")]; !ok {
 			rep.warn("dns advertises %s for zone %q but the tailnet has no split-DNS route for it — peers (and phones) cannot resolve these hostnames", dnsInfo.Advertise, z)
@@ -58,9 +78,11 @@ func tailscaleChecks(rep *statusReport) {
 	}
 }
 
-// splitDNSRoutes parses `tailscale dns status` output into domain → present.
-func splitDNSRoutes(out string) map[string]bool {
-	routes := map[string]bool{}
+// splitDNSRoutes parses `tailscale dns status` output into domain → target.
+// The target is what makes a hijacked zone diagnosable, so it is kept even
+// though the advertise check only cares whether a route exists.
+func splitDNSRoutes(out string) map[string]string {
+	routes := map[string]string{}
 	in := false
 	for _, line := range strings.Split(out, "\n") {
 		trimmed := strings.TrimSpace(line)
@@ -77,11 +99,33 @@ func splitDNSRoutes(out string) map[string]bool {
 			}
 			fields := strings.Fields(strings.TrimPrefix(trimmed, "- "))
 			if len(fields) > 0 {
-				routes[strings.Trim(fields[0], ".")] = true
+				target := ""
+				// "- domain  -> 100.64.0.1"
+				for i, f := range fields {
+					if f == "->" && i+1 < len(fields) {
+						target = fields[i+1]
+						break
+					}
+				}
+				routes[strings.Trim(fields[0], ".")] = target
 			}
 		}
 	}
 	return routes
+}
+
+// tailscaleSelfIPs is this machine's own tailnet addresses, so a split-DNS
+// route that already points here is not reported as a hijack.
+func tailscaleSelfIPs(bin string) map[string]bool {
+	self := map[string]bool{}
+	out, err := exec.Command(bin, "ip").Output()
+	if err != nil {
+		return self
+	}
+	for _, line := range strings.Fields(string(out)) {
+		self[strings.TrimSpace(line)] = true
+	}
+	return self
 }
 
 // serveTerminates443 reports whether an HTTPS (TLS-terminating) serve

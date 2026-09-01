@@ -14,6 +14,10 @@ use Illuminate\Contracts\Validation\ValidationRule;
  * is rejected with a retryable message — an outage must never hand out
  * "grafana".
  *
+ * With no GERRY_API configured the rule falls back to blocklist-only mode, so
+ * an app with no registry (CI, a fresh checkout) still refuses the reserved
+ * names instead of failing every submission.
+ *
  * Usage:
  *   'subdomain' => ['required', new HostnameAvailable('olsyn.com')]
  */
@@ -46,7 +50,7 @@ class HostnameAvailable implements ValidationRule
         private ?string $zone = null,
         private ?Client $client = null,
     ) {
-        $this->zone = $zone ?? config('gerrymander.zone', env('GERRY_ZONE'));
+        $this->zone = $zone ?? config('gerrymander.zone');
         $this->client = $client ?? new Client;
     }
 
@@ -58,6 +62,10 @@ class HostnameAvailable implements ValidationRule
             $fail("The {$attribute} \"{$label}\" is reserved.");
 
             return;
+        }
+
+        if (! $this->client->enabled() || ! $this->zone) {
+            return; // no registry configured — blocklist-only mode
         }
 
         try {
