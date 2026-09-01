@@ -5,6 +5,9 @@ until 1.0, minor bumps may include breaking changes (called out explicitly).
 
 ## Unreleased
 
+- `gerry status` now counts warnings in its final summary instead of saying
+  "all districts in order," and a dev zone that resolves away from loopback
+  gets the concrete Linux `systemd-resolved` per-zone routing fix.
 - `api.extra_listen` adds API listeners alongside `api.listen`. The
   `@docker` sentinel expands to the host's docker bridge gateways, so
   containers can reach the registry at `host.docker.internal` without

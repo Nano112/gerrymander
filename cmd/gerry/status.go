@@ -33,10 +33,14 @@ func isTTY(f *os.File) bool {
 	return err == nil && st.Mode()&os.ModeCharDevice != 0
 }
 
-type statusReport struct{ failures int }
+type statusReport struct {
+	failures int
+	warnings int
+}
 
 func (s *statusReport) ok(f string, a ...any) { fmt.Printf("  %s %s\n", okMark, fmt.Sprintf(f, a...)) }
 func (s *statusReport) warn(f string, a ...any) {
+	s.warnings++
 	fmt.Printf("  %s %s\n", warnMark, fmt.Sprintf(f, a...))
 }
 func (s *statusReport) bad(f string, a ...any) {
@@ -45,6 +49,17 @@ func (s *statusReport) bad(f string, a ...any) {
 }
 func (s *statusReport) fix(f string, a ...any) {
 	fmt.Printf("      %s→ %s%s\n", dimOn, fmt.Sprintf(f, a...), dimOff)
+}
+
+func (s *statusReport) summary() string {
+	switch {
+	case s.failures > 0:
+		return fmt.Sprintf("%d problem(s), %d warning(s) found.", s.failures, s.warnings)
+	case s.warnings > 0:
+		return fmt.Sprintf("no failures; %d warning(s) need attention.", s.warnings)
+	default:
+		return "all districts in order."
+	}
 }
 
 func cmdStatus(args []string) error {
@@ -129,11 +144,7 @@ func cmdStatus(args []string) error {
 	}
 
 	fmt.Println()
-	if rep.failures == 0 {
-		fmt.Println("  all districts in order.")
-	} else {
-		fmt.Printf("  %d problem(s) found.\n", rep.failures)
-	}
+	fmt.Println("  " + rep.summary())
 	fmt.Println()
 	if rep.failures > 0 {
 		os.Exit(1)
@@ -160,6 +171,11 @@ func probeZone(rep *statusReport, zone string) {
 	loop := addrs[0] == "127.0.0.1" || addrs[0] == "::1"
 	if !loop {
 		rep.warn("%-26s DNS resolves to %s (expected loopback)", zone, addrs[0])
+		if runtime.GOOS == "linux" {
+			rep.fix("systemd-resolved: add ~%s to Domains= in /etc/systemd/resolved.conf.d/gerry-local.conf, then restart systemd-resolved", zone)
+		} else {
+			rep.fix("run `gerry setup` to route this zone to the local daemon")
+		}
 	} else {
 		rep.ok("%-26s DNS → %s", zone, addrs[0])
 	}
