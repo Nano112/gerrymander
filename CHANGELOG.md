@@ -5,6 +5,13 @@ until 1.0, minor bumps may include breaking changes (called out explicitly).
 
 ## Unreleased
 
+- Linux installs now grant `cap_net_bind_service` before starting the user
+  service. Direct and Linuxbrew updates preserve or restore file capabilities,
+  elevate only the install operation, and restart an installed host service
+  automatically. Rerunning the curl installer also restarts an existing
+  service. Together these prevent a healthy API with dead
+  DNS/HTTP/TLS listeners—or a new CLI controlling an old daemon—after an
+  upgrade.
 - `gerry status` now counts warnings in its final summary instead of saying
   "all districts in order," and a dev zone that resolves away from loopback
   gets the concrete Linux `systemd-resolved` per-zone routing fix.

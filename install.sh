@@ -46,7 +46,37 @@ else
   install "$BIN" "$DEST/gerry"
 fi
 
+# Linux host mode owns the normal DNS/HTTP/HTTPS ports. Grant the narrowly
+# scoped bind capability before bootstrap starts the user service; replacing
+# the binary creates a new inode, so this must run on every reinstall.
+if [ "$OS" = "linux" ]; then
+  echo "granting permission to bind DNS/HTTP/HTTPS ports (sudo)…"
+  if [ "$(id -u)" -eq 0 ]; then
+    setcap cap_net_bind_service=ep "$DEST/gerry" || {
+      echo "could not grant cap_net_bind_service — install libcap/setcap and rerun" >&2
+      exit 1
+    }
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo setcap cap_net_bind_service=ep "$DEST/gerry" || {
+      echo "could not grant cap_net_bind_service — install libcap/setcap and rerun" >&2
+      exit 1
+    }
+  else
+    echo "Linux host mode needs sudo + setcap to bind ports 53/80/443" >&2
+    exit 1
+  fi
+fi
+
 echo "gerry $("$DEST/gerry" version 2>/dev/null | cut -d' ' -f2) installed."
+
+# A reinstall replaces the on-disk binary while an existing daemon keeps the
+# old inode mapped. Restart it now so rerunning this installer is a complete
+# upgrade rather than "new CLI, old daemon until next login".
+if [ "${GERRY_INSTALL_ONLY:-}" != "1" ] && [ "$OS" = "linux" ] && [ -f "$HOME/.config/systemd/user/gerrymander.service" ]; then
+  "$DEST/gerry" service restart
+elif [ "${GERRY_INSTALL_ONLY:-}" != "1" ] && [ "$OS" = "darwin" ] && [ -f "$HOME/Library/LaunchAgents/com.gerrymander.daemon.plist" ]; then
+  "$DEST/gerry" service restart
+fi
 
 # Full bootstrap (daemon + DNS + trust) unless the caller opted out. sudo
 # prompts read /dev/tty, so this works under `curl | sh`; without a tty

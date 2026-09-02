@@ -71,6 +71,9 @@ func cmdServiceLinux(args []string) error {
 			return err
 		}
 		self, _ = filepath.EvalSymlinks(self)
+		if err := ensureLowPortCapability(self); err != nil {
+			return err
+		}
 		writeStarterConfig(*config, home)
 		os.MkdirAll(unitDir, 0o755)
 		unit := `[Unit]
@@ -95,8 +98,6 @@ WantedBy=default.target
 		}
 		fmt.Println("installed + started:", systemdUnit)
 		fmt.Println("logs: journalctl --user -u", systemdUnit, "-f")
-		fmt.Println("NOTE: binding ports 80/443 as a user needs:")
-		fmt.Println("  sudo setcap 'cap_net_bind_service=+ep'", self)
 		fmt.Println("survive logout: loginctl enable-linger", os.Getenv("USER"))
 		return nil
 	case "uninstall":
@@ -120,6 +121,25 @@ WantedBy=default.target
 	default:
 		return fmt.Errorf("unknown subcommand %q", args[0])
 	}
+}
+
+func hostServiceInstalled() bool {
+	switch runtime.GOOS {
+	case "linux":
+		home, _ := os.UserHomeDir()
+		return fileExists(filepath.Join(home, ".config", "systemd", "user", systemdUnit))
+	case "darwin":
+		return fileExists(plistPath())
+	default:
+		return false
+	}
+}
+
+func restartHostService() error {
+	if runtime.GOOS == "linux" {
+		return cmdServiceLinux([]string{"restart"})
+	}
+	return cmdService([]string{"restart"})
 }
 
 func serviceInstall(args []string) error {
