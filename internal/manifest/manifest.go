@@ -9,18 +9,29 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/Nano112/gerrymander/catalog"
 	"github.com/Nano112/gerrymander/internal/core"
 )
 
 // Manifest is one project's declaration.
 type Manifest struct {
-	Project  string             `yaml:"project"`
-	Zone     string             `yaml:"zone"`
-	Services map[string]Service `yaml:"services"`
+	Application catalog.Application         `yaml:"application,omitempty"`
+	Environment string                      `yaml:"environment,omitempty"`
+	Workspace   string                      `yaml:"workspace,omitempty"`
+	Resources   map[string]catalog.Resource `yaml:"resources,omitempty"`
+	Project     string                      `yaml:"project"`
+	Zone        string                      `yaml:"zone"`
+	Services    map[string]Service          `yaml:"services"`
 }
 
 // Service declares hostnames plus one or more routes.
 type Service struct {
+	ID           string                `yaml:"id,omitempty"`
+	Role         string                `yaml:"role,omitempty"`
+	Display      catalog.Display       `yaml:"display,omitempty"`
+	Capabilities *catalog.Capabilities `yaml:"capabilities,omitempty"`
+	Deployment   catalog.Deployment    `yaml:"deployment,omitempty"`
+	CatalogOnly  bool                  `yaml:"catalog_only,omitempty"`
 	// Hostnames within the zone. "olsyn.test" = apex, "*.olsyn.test" =
 	// wildcard, "vite.olsyn.test" = a label. Multiple entries collapse
 	// into apex+wildcard on the same allocation when possible.
@@ -95,10 +106,26 @@ func Parse(b []byte, path string) (*Manifest, error) {
 	if m.Project == "" {
 		return nil, fmt.Errorf("%s: project is required", path)
 	}
-	if m.Zone == "" {
+	if (m.Workspace != "" && !catalog.ValidID(m.Workspace)) || (m.Environment != "" && !catalog.ValidID(m.Environment)) {
+		return nil, fmt.Errorf("invalid environment or workspace")
+	}
+	if m.Workspace != "" && strings.Contains(m.Project, "@") {
+		return nil, fmt.Errorf("workspace project names cannot contain @")
+	}
+	routed := false
+	for _, s := range m.Services {
+		routed = routed || !s.CatalogOnly
+	}
+	if m.Zone == "" && (routed || (len(m.Services) == 0 && len(m.Resources) == 0)) {
 		return nil, fmt.Errorf("%s: zone is required", path)
 	}
 	for name, svc := range m.Services {
+		if svc.CatalogOnly {
+			if len(svc.Hostnames) > 0 || svc.Address != "" || svc.PortPool != "" || svc.Supervised != nil || svc.Docker != nil || len(svc.Routes) > 0 || svc.Dev != "" || len(svc.Listen) > 0 {
+				return nil, fmt.Errorf("catalog_only service %s cannot define routing or dev commands", name)
+			}
+			continue
+		}
 		if len(svc.Hostnames) == 0 {
 			return nil, fmt.Errorf("%s: service %q has no hostnames", path, name)
 		}
@@ -162,7 +189,10 @@ func (m *Manifest) Claims(resolvePort func(pool, ownerRef string) (int, error)) 
 	var out []Claim
 	claimedLabels := map[string]string{} // label → service, cross-service collision check
 	for name, svc := range m.Services {
-		ownerRef := m.Project + "/" + name
+		if svc.CatalogOnly {
+			continue
+		}
+		ownerRef := m.OwnerRef(name)
 		var routes []core.Route
 		if len(svc.Routes) > 0 {
 			for i, rs := range svc.Routes {
@@ -219,7 +249,7 @@ func (m *Manifest) Claims(resolvePort func(pool, ownerRef string) (int, error)) 
 			s := labels[label]
 			out = append(out, Claim{
 				Zone: m.Zone, Label: label, Wildcard: s.wildcard,
-				Project: m.Project, OwnerRef: ownerRef, Service: name,
+				Project: m.RoutingProject(), OwnerRef: ownerRef, Service: name,
 				Spec: core.Spec{Routes: routes, Wildcard: s.wildcard},
 			})
 		}

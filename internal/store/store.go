@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strings"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "modernc.org/sqlite"
 )
 
@@ -169,6 +170,24 @@ CREATE TABLE IF NOT EXISTS tokens (
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	last_used_at TIMESTAMP,
 	revoked_at TIMESTAMP
+);
+`, `
+CREATE TABLE IF NOT EXISTS catalog_entries (
+ kind TEXT NOT NULL,
+ id TEXT NOT NULL,
+ application_id TEXT NOT NULL,
+ natural_key TEXT,
+ data TEXT NOT NULL,
+ updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY (kind, id),
+ UNIQUE (kind, application_id, natural_key)
+);
+CREATE INDEX IF NOT EXISTS idx_catalog_application ON catalog_entries(application_id);
+CREATE TABLE IF NOT EXISTS catalog_assets (
+ id TEXT PRIMARY KEY,
+ media_type TEXT NOT NULL,
+ data TEXT NOT NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 `}
 

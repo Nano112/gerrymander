@@ -50,7 +50,8 @@ var usageSections = []usageSection{
 			"declared dev: commands — set-and-forget for any runtime"}},
 		{"run --owner O -- CMD [args…]", []string{"port courier: claims O's sticky port, runs CMD",
 			"with PORT set and literal {PORT} substituted"}},
-		{"up / down [-f file]", []string{"apply / release a project manifest"}},
+		{"up / down [-f file]", []string{"apply / release a project manifest (up --prune removes stale routes)"}},
+		{"catalog [--access --environment E]", []string{"shared application identities, resources and capabilities"}},
 	}},
 	{"registry", []usageEntry{
 		{"claim --zone Z --label L", []string{"claim a hostname ([--owner O] [--kind tenant|platform] [--hold])"}},
@@ -60,7 +61,7 @@ var usageSections = []usageSection{
 		{"release --id N", []string{"give a name back"}},
 		{"port --owner O [--pool dev]", []string{"sticky dev port (same owner, same port)"}},
 		{"zone add|rm", []string{"manage zones"}},
-		{"token create|ls|revoke", []string{"scoped API credentials (owner-confined or admin)"}},
+		{"token create|ls|revoke", []string{"scoped API credentials (owner, admin or catalog-read)"}},
 		{"conflicts", []string{"what the observer flagged"}},
 	}},
 	{"environment", []usageEntry{

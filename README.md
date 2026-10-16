@@ -136,6 +136,8 @@ everything the cluster actually routes; `/v1/conflicts` and the
 Full documentation lives at
 [nano112.github.io/gerrymander](https://nano112.github.io/gerrymander/).
 
+- [`docs/catalog.md`](docs/catalog.md): shared app/service identities, logos,
+  workspace deployments, declared resources and versioned access definitions
 - [`docs/frameworks.md`](docs/frameworks.md): recipes for the Vite plugin,
   Next, SvelteKit/Astro, FastAPI, Bun.serve, Rails (labeled
   verified/unverified)

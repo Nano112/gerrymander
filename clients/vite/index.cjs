@@ -15,6 +15,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 
+const { prepareManifest } = require("./manifest.cjs");
+
 const API = process.env.GERRY_API || "http://127.0.0.1:4780";
 
 function findManifest(startDir, explicit) {
@@ -86,10 +88,18 @@ function gerrymander(options = {}) {
       try {
         const headers = { "Content-Type": "application/json" };
         if (process.env.GERRY_API_KEY) headers.Authorization = `Bearer ${process.env.GERRY_API_KEY}`;
+        const yaml = await prepareManifest(manifestPath, async data => {
+          const res = await fetch(`${API}/v1/catalog/assets`, {
+            method: "POST", headers, body: JSON.stringify({ data: data.toString("base64") }), signal: AbortSignal.timeout(4000),
+          });
+          const asset = await res.json();
+          if (!res.ok) throw new Error(asset.message || "Logo import failed");
+          return asset;
+        });
         const res = await fetch(`${API}/v1/manifest/apply`, {
           method: "POST",
           headers,
-          body: JSON.stringify({ yaml: fs.readFileSync(manifestPath, "utf8") }),
+          body: JSON.stringify({ yaml }),
           signal: AbortSignal.timeout(4000),
         });
         apply = await res.json();
@@ -98,7 +108,7 @@ function gerrymander(options = {}) {
           return;
         }
       } catch (e) {
-        console.warn(`[gerrymander] daemon unreachable at ${API} (${e.message}) — vite defaults`);
+        console.warn(`[gerrymander] manifest apply failed at ${API} (${e.message}) — vite defaults`);
         return;
       }
 

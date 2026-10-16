@@ -48,6 +48,52 @@ class Client
         return $req;
     }
 
+    /** Shared identities and declared dependencies. Contains no user grants. */
+    public function catalog(?string $applicationId = null): array
+    {
+        $result = $this->http()->get("{$this->base}/v1/catalog", [
+            'application_id' => $applicationId,
+        ])->throw()->json();
+        if (($result['schema_version'] ?? null) !== 1) {
+            throw new \UnexpectedValueException('Unsupported catalog schema version');
+        }
+
+        return $result;
+    }
+
+    /**
+     * Explicitly activated capability definitions for one environment/workspace.
+     * Use stable service.id for grants; continue enforcing authorization locally.
+     * Do not replace an unavailable catalog with an empty permission allowlist.
+     */
+    public function accessCatalog(string $environment, string $workspace = ''): array
+    {
+        if ($environment === '') {
+            throw new \InvalidArgumentException('Catalog environment is required');
+        }
+
+        $result = $this->http()->get("{$this->base}/v1/catalog/access", [
+            'environment' => $environment,
+            'workspace' => $workspace,
+        ])->throw()->json();
+        if (($result['schema_version'] ?? null) !== 1 || !is_array($result['services'] ?? null)) {
+            throw new \UnexpectedValueException('Unsupported or invalid access catalog response');
+        }
+
+        return $result['services'];
+    }
+
+    /** Fetch logo bytes server-side, then serve through your authenticated app. */
+    public function catalogAsset(string $assetId): array
+    {
+        if (!preg_match('/^sha256:[a-f0-9]{64}$/D', $assetId)) {
+            throw new \InvalidArgumentException('Invalid catalog asset id');
+        }
+        $response = $this->http()->get("{$this->base}/v1/catalog/assets/".rawurlencode($assetId))->throw();
+
+        return ['content_type' => $response->header('Content-Type'), 'data' => $response->body()];
+    }
+
     /**
      * @return array{available: bool, reason?: string, message?: string, suggestions?: string[]}
      */

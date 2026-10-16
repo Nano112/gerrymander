@@ -43,7 +43,7 @@ type manifestApplyResponse struct {
 
 func (s *Server) handleManifestApply(w http.ResponseWriter, r *http.Request) {
 	var req manifestApplyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.YAML) == "" {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2*1024*1024)).Decode(&req); err != nil || strings.TrimSpace(req.YAML) == "" {
 		writeErr(w, 400, "invalid", "body must be {\"yaml\": \"<gerrymander.yaml content>\"}")
 		return
 	}
@@ -52,15 +52,26 @@ func (s *Server) handleManifestApply(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "invalid", err.Error())
 		return
 	}
-	ctx := r.Context()
-	if _, err := s.Store.EnsureZone(ctx, core.Zone{Name: m.Zone, Profile: "dev", WildcardMode: true}); err != nil {
-		writeErr(w, 500, "internal", err.Error())
+	bundle, err := m.CatalogBundle()
+	if err != nil {
+		catalogError(w, err)
 		return
 	}
+	ctx := r.Context()
+	if err := s.Store.CheckCatalog(ctx, bundle); err != nil {
+		catalogError(w, err)
+		return
+	}
+	if m.Zone != "" {
+		if _, err := s.Store.EnsureZone(ctx, core.Zone{Name: m.Zone, Profile: "dev", WildcardMode: true}); err != nil {
+			writeErr(w, 500, "internal", err.Error())
+			return
+		}
 
+	}
 	ports := map[string]int{} // ownerRef → sticky value
 	resolvePort := func(pool, ownerRef string) (int, error) {
-		pa, err := s.Ports.Claim(ctx, pool, m.Project, ownerRef)
+		pa, err := s.Ports.Claim(ctx, pool, m.RoutingProject(), ownerRef)
 		if err != nil {
 			return 0, err
 		}
@@ -100,7 +111,7 @@ func (s *Server) handleManifestApply(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Update in place only when this manifest plausibly owns it.
-		if existing.OwnerRef != cl.OwnerRef && !(existing.Source == core.SourceManifest && existing.Project == m.Project) {
+		if existing.OwnerRef != cl.OwnerRef && !(existing.Source == core.SourceManifest && existing.Project == m.RoutingProject()) {
 			writeJSON(w, 409, map[string]any{
 				"error":   "taken",
 				"message": core.FQDN(cl.Label, cl.Zone) + " is owned by " + existing.OwnerRef + " (" + string(existing.Kind) + ")",
@@ -109,7 +120,7 @@ func (s *Server) handleManifestApply(w http.ResponseWriter, r *http.Request) {
 		}
 		existing.Spec = cl.Spec
 		existing.OwnerRef = cl.OwnerRef
-		existing.Project = m.Project
+		existing.Project = m.RoutingProject()
 		if err := s.Store.UpdateAllocation(ctx, existing); err != nil {
 			writeErr(w, 500, "internal", err.Error())
 			return
@@ -117,8 +128,8 @@ func (s *Server) handleManifestApply(w http.ResponseWriter, r *http.Request) {
 		resp.Updated = append(resp.Updated, existing.FQDN)
 	}
 
-	if req.Prune == nil || *req.Prune {
-		owned, err := s.Store.ListAllocations(ctx, store.AllocFilter{Zone: m.Zone, Project: m.Project, ExcludeReleased: true})
+	if m.Zone != "" && (req.Prune == nil || *req.Prune) {
+		owned, err := s.Store.ListAllocations(ctx, store.AllocFilter{Zone: m.Zone, Project: m.RoutingProject(), ExcludeReleased: true})
 		if err != nil {
 			writeErr(w, 500, "internal", err.Error())
 			return
@@ -134,7 +145,7 @@ func (s *Server) handleManifestApply(w http.ResponseWriter, r *http.Request) {
 
 	// Per-service summary for clients configuring dev servers.
 	for name, svc := range m.Services {
-		ownerRef := m.Project + "/" + name
+		ownerRef := m.OwnerRef(name)
 		res := manifestServiceResult{Port: ports[ownerRef]}
 		seenListen := map[int]bool{}
 		for _, h := range svc.Hostnames {
@@ -158,6 +169,33 @@ func (s *Server) handleManifestApply(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		resp.Services[name] = res
+	}
+	if err := s.Store.ApplyCatalog(ctx, bundle); err != nil {
+		catalogError(w, err)
+		return
+	}
+	if req.Prune == nil || *req.Prune {
+		snapshot, err := s.Store.Catalog(ctx, bundle.Application.ID)
+		if err != nil {
+			writeErr(w, 500, "internal", err.Error())
+			return
+		}
+		keepDeployments := map[string]bool{}
+		for _, d := range bundle.Deployments {
+			keepDeployments[d.ID] = true
+		}
+		env := m.Environment
+		if env == "" {
+			env = "development"
+		}
+		for _, d := range snapshot.Deployments {
+			if d.Environment == env && d.Workspace == m.Workspace && d.Zone == m.Zone && !keepDeployments[d.ID] {
+				if err := s.Store.DeactivateCatalogDeployment(ctx, d.ID); err != nil {
+					catalogError(w, err)
+					return
+				}
+			}
+		}
 	}
 	s.mutated()
 	writeJSON(w, 200, resp)

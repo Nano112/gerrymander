@@ -173,6 +173,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /v1/allocations/{id}", s.auth(s.handleRelease))
 	mux.HandleFunc("GET /v1/ports", s.adminOnly(s.handleListPorts))
 	mux.HandleFunc("POST /v1/ports", s.adminOnly(s.handleClaimPort))
+	mux.HandleFunc("GET /v1/catalog", s.catalogRead(s.handleCatalog))
+	mux.HandleFunc("GET /v1/catalog/access", s.catalogRead(s.handleAccessCatalog))
+	mux.HandleFunc("POST /v1/catalog/apply", s.adminOnly(s.handleApplyCatalog))
+	mux.HandleFunc("POST /v1/catalog/assets", s.adminOnly(s.handleUploadCatalogAsset))
+	mux.HandleFunc("GET /v1/catalog/assets/{id}", s.catalogRead(s.handleCatalogAsset))
+	mux.HandleFunc("POST /v1/catalog/deployments/{id}/deactivate", s.adminOnly(s.handleDeactivateCatalogDeployment))
 	mux.HandleFunc("POST /v1/manifest/apply", s.adminOnly(s.handleManifestApply))
 	mux.HandleFunc("GET /v1/conflicts", s.adminOnly(s.handleConflicts))
 	mux.HandleFunc("GET /v1/processes", s.adminOnly(s.handleProcesses))
@@ -199,7 +205,7 @@ func (s *Server) Handler() http.Handler {
 // tokens from the tokens table may be confined to one owner_ref and a zone
 // allowlist.
 type Principal struct {
-	Scope    string // store.ScopeAdmin | store.ScopeOwner
+	Scope    string // store.ScopeAdmin | store.ScopeOwner | store.ScopeCatalogRead
 	Name     string // token name, or "root"
 	OwnerRef string
 	Zones    []string // empty = all zones
@@ -246,6 +252,10 @@ func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 			// keyless loopback dev mode (serve refuses this off-loopback)
 		default:
 			writeErr(w, 401, "unauthorized", "missing or invalid API key")
+			return
+		}
+		if p.Scope == store.ScopeCatalogRead && r.URL.Path != "/v1/catalog" && !strings.HasPrefix(r.URL.Path, "/v1/catalog/") {
+			writeErr(w, 403, "forbidden", "catalog-read tokens cannot access routing or administration")
 			return
 		}
 		next(w, r.WithContext(context.WithValue(r.Context(), principalKey{}, p)))

@@ -16,7 +16,7 @@ import (
 type Token struct {
 	ID         int64      `json:"id"`
 	Name       string     `json:"name"`
-	Scope      string     `json:"scope"` // "admin" | "owner"
+	Scope      string     `json:"scope"` // "admin" | "owner" | "catalog-read"
 	OwnerRef   string     `json:"owner_ref,omitempty"`
 	Zones      []string   `json:"zones,omitempty"` // empty = all zones
 	CreatedAt  time.Time  `json:"created_at"`
@@ -26,9 +26,11 @@ type Token struct {
 
 // ScopeAdmin tokens can do everything the root API key can.
 // ScopeOwner tokens are confined to tenant claims for one owner_ref.
+// ScopeCatalogRead can read catalog metadata and assets across the registry.
 const (
-	ScopeAdmin = "admin"
-	ScopeOwner = "owner"
+	ScopeAdmin       = "admin"
+	ScopeOwner       = "owner"
+	ScopeCatalogRead = "catalog-read"
 )
 
 func hashToken(plaintext string) string {
@@ -38,11 +40,14 @@ func hashToken(plaintext string) string {
 
 // CreateToken mints a token and returns its plaintext exactly once.
 func (s *Store) CreateToken(ctx context.Context, name, scope, ownerRef string, zones []string) (Token, string, error) {
-	if scope != ScopeAdmin && scope != ScopeOwner {
-		return Token{}, "", errors.New("scope must be admin or owner")
+	if scope != ScopeAdmin && scope != ScopeOwner && scope != ScopeCatalogRead {
+		return Token{}, "", errors.New("scope must be admin, owner or catalog-read")
 	}
 	if scope == ScopeOwner && ownerRef == "" {
 		return Token{}, "", errors.New("owner-scoped tokens need an owner_ref")
+	}
+	if scope == ScopeCatalogRead && (ownerRef != "" || len(zones) != 0) {
+		return Token{}, "", errors.New("catalog-read is registry-wide; owner_ref and zones are not supported")
 	}
 	raw := make([]byte, 24)
 	if _, err := rand.Read(raw); err != nil {

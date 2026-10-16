@@ -48,3 +48,11 @@ curl -H "Authorization: Bearer $TOKEN" \
 ```
 
 Owner tokens see their own allocations' history; admins see everything.
+
+## Catalog readers
+
+`gerry token create infra-catalog --scope catalog-read` grants read-only access
+to the entire catalog and its logo assets. It cannot read allocations or ports,
+publish metadata, change routes or manage tokens. Owner tokens cannot read the
+catalog. This scope is registry-wide: zone and owner restrictions are not
+supported. Keep the token server-side. See [the catalog contract](catalog.md).

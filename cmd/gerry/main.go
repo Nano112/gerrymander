@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/Nano112/gerrymander/catalog"
 	"github.com/Nano112/gerrymander/internal/actuate"
 	"github.com/Nano112/gerrymander/internal/api"
 	"github.com/Nano112/gerrymander/internal/client"
@@ -87,6 +89,8 @@ func main() {
 		err = cmdService(args)
 	case "conflicts":
 		err = cmdConflicts(args)
+	case "catalog":
+		err = cmdCatalog(args)
 	case "up":
 		err = cmdUp(args)
 	case "down":
@@ -807,7 +811,7 @@ func cmdDev(args []string) error {
 	// starts, then launch each service on its sticky port.
 	c := apiClient()
 	ctx := context.Background()
-	yamlBytes, err := os.ReadFile(*file)
+	yamlBytes, err := prepareManifest(ctx, *file)
 	if err != nil {
 		return err
 	}
@@ -838,7 +842,7 @@ func cmdDev(args []string) error {
 			return 0, nil
 		}
 		var pa core.PortAllocation
-		err := c.Do(ctx, "POST", "/v1/ports", map[string]any{"pool": "dev", "owner_ref": m.Project + "/" + name}, &pa)
+		err := c.Do(ctx, "POST", "/v1/ports", map[string]any{"pool": "dev", "owner_ref": m.OwnerRef(name), "project": m.RoutingProject()}, &pa)
 		return pa.Value, err
 	}
 	shell, shellFlag := os.Getenv("SHELL"), "-c"
@@ -1084,60 +1088,29 @@ func devEnv(port int) []string {
 }
 
 func cmdUp(args []string) error {
-	fs := flag.NewFlagSet("up", flag.ExitOnError)
-	file := fs.String("f", "gerrymander.yaml", "manifest file")
-	fs.Parse(args)
-	m, err := manifest.Load(*file)
-	if err != nil {
-		return err
-	}
-	c := apiClient()
+	f := flag.NewFlagSet("up", flag.ExitOnError)
+	file := f.String("f", "gerrymander.yaml", "manifest file")
+	prune := f.Bool("prune", false, "release removed manifest routes and deactivate removed deployments")
+	f.Parse(args)
 	ctx := context.Background()
-	// A project manifest introducing a fresh dev zone shouldn't require a
-	// daemon config edit — ensure it exists (idempotent).
-	if err := c.Do(ctx, "POST", "/v1/zones", map[string]any{"name": m.Zone, "profile": "dev"}, nil); err != nil {
-		return fmt.Errorf("ensure zone %s: %w", m.Zone, err)
-	}
-	resolvePort := func(pool, ownerRef string) (int, error) {
-		var out core.PortAllocation
-		if err := c.Do(ctx, "POST", "/v1/ports", map[string]any{"pool": pool, "owner_ref": ownerRef}, &out); err != nil {
-			return 0, err
-		}
-		return out.Value, nil
-	}
-	claims, err := m.Claims(resolvePort)
+	data, err := prepareManifest(ctx, *file)
 	if err != nil {
 		return err
 	}
-	for _, cl := range claims {
-		var out struct {
-			Allocation core.Allocation `json:"allocation"`
-		}
-		err := c.Do(ctx, "POST", "/v1/claims", map[string]any{
-			"zone": cl.Zone, "label": cl.Label, "kind": "platform", "source": "manifest",
-			"project": cl.Project, "owner_ref": cl.OwnerRef, "spec": cl.Spec,
-		}, &out)
-		if err == nil {
-			fmt.Printf("claimed  %s (id %d)\n", out.Allocation.FQDN, out.Allocation.ID)
-			continue
-		}
-		apiErr, ok := err.(*client.APIError)
-		if !ok || (apiErr.Reason != "taken" && apiErr.Reason != "reserved") {
-			return fmt.Errorf("claim %s.%s: %w", cl.Label, cl.Zone, err)
-		}
-		// Already allocated: update spec in place when we own it.
-		existing, ferr := findAllocation(ctx, c, cl.Zone, cl.Label)
-		if ferr != nil {
-			return fmt.Errorf("claim %s.%s: taken and not listable: %v", cl.Label, cl.Zone, ferr)
-		}
-		if existing.OwnerRef != cl.OwnerRef && existing.Source != core.SourceManifest {
-			return fmt.Errorf("claim %s.%s: owned by %s (%s) — refusing to overwrite", cl.Label, cl.Zone, existing.OwnerRef, existing.Kind)
-		}
-		if err := c.Do(ctx, "PATCH", fmt.Sprintf("/v1/allocations/%d", existing.ID), map[string]any{"spec": cl.Spec}, nil); err != nil {
-			return err
-		}
-		fmt.Printf("updated  %s (id %d)\n", existing.FQDN, existing.ID)
+	var result struct{ Claimed, Updated, Pruned []string }
+	if err := apiClient().Do(ctx, "POST", "/v1/manifest/apply", map[string]any{"yaml": string(data), "prune": *prune}, &result); err != nil {
+		return err
 	}
+	for _, v := range result.Claimed {
+		fmt.Println("claimed ", v)
+	}
+	for _, v := range result.Updated {
+		fmt.Println("updated ", v)
+	}
+	for _, v := range result.Pruned {
+		fmt.Println("released", v)
+	}
+	fmt.Println("catalog updated")
 	return nil
 }
 
@@ -1168,6 +1141,14 @@ func cmdDown(args []string) error {
 			return err
 		}
 		fmt.Printf("released %s\n", existing.FQDN)
+	}
+	for key := range m.Services {
+		if err := catalogClient().Deactivate(ctx, m.DeploymentID(key)); err != nil {
+			var apiErr *catalog.APIError
+			if !errors.As(err, &apiErr) || apiErr.Status != 404 {
+				return err
+			}
+		}
 	}
 	return nil
 }

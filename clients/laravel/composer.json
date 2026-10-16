@@ -1,6 +1,6 @@
 {
     "name": "gerrymander/laravel",
-    "description": "Laravel client for gerrymander \u2014 hostname availability checks, holds, and sticky ports for multi-tenant apps",
+    "description": "Laravel client for gerrymander — hostname allocation, sticky ports and shared application/service catalog",
     "type": "library",
     "license": "MIT",
     "require": {

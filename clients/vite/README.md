@@ -24,3 +24,12 @@ Renaming a domain is: edit the yaml, restart the dev server. Nothing else.
   (default `http://127.0.0.1:4780`).
 - Daemon unreachable → a warning, and vite runs on its defaults. Production
   builds are never touched.
+
+## Shared catalog metadata
+
+The plugin publishes optional application/service metadata and declared resources
+from the same manifest. Relative `display.logo` files are imported before apply;
+PNG, JPEG and static SVG files must stay inside the manifest directory and be at
+most 512 KiB. Upgrade the daemon alongside the plugin. See
+[the catalog contract](../../docs/catalog.md) for stable ids, workspace isolation
+and explicit capability version activation. No cloud account is required.

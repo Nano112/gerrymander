@@ -5,6 +5,18 @@ until 1.0, minor bumps may include breaking changes (called out explicitly).
 
 ## Unreleased
 
+- Shared application/service catalog: stable identities, display metadata and
+  content-addressed logos, environment/workspace deployments, declared resources,
+  immutable capability versions with explicit activation, and a registry-wide
+  `catalog-read` token scope. Optional manifest fields publish through `gerry up`,
+  `gerry dev` and Vite; `gerry down` retires deployments. Includes the public Go
+  catalog SDK, Laravel reader methods, CLI discovery and `up --prune`.
+  Existing routing ownership is preserved when no workspace is supplied.
+  See [the catalog contract and upgrade notes](docs/catalog.md).
+- Register the PostgreSQL driver for the existing PostgreSQL DSN path; catalog
+  migrations, immutable versions and concurrent writes are tested on PostgreSQL
+  as well as SQLite.
+
 - Linux installs now grant `cap_net_bind_service` before starting the user
   service. Direct and Linuxbrew updates preserve or restore file capabilities,
   elevate only the install operation, and restart an installed host service

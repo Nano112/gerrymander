@@ -1,0 +1,38 @@
+project: atlas
+application:
+  id: app:atlas
+  display:
+    name: Atlas
+    description: Example project with shared catalog identity
+    logo: logo.svg
+    icon: application
+    color: '#7259DB'
+environment: development
+workspace: alice
+zone: atlas-alice.test
+services:
+  web:
+    id: atlas-web
+    role: web
+    display:
+      name: Atlas console
+    hostnames: [atlas-alice.test]
+    port_pool: dev
+    capabilities:
+      version: v1
+      entry_permission: access
+      permissions:
+        access: Open console
+        jobs.read: Read jobs
+      roles:
+        viewer: [access, jobs.read]
+    deployment:
+      capability_version: v1
+resources:
+  database:
+    kind: database
+    provider: local
+    display:
+      name: Development database
+      icon: postgres
+    services: [web]

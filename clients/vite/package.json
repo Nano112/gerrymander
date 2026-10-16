@@ -7,7 +7,8 @@
   "files": [
     "index.cjs",
     "index.d.ts",
-    "README.md"
+    "README.md",
+    "manifest.cjs"
   ],
   "peerDependencies": {
     "vite": ">=5"
@@ -23,5 +24,11 @@
       "require": "./index.cjs",
       "import": "./index.cjs"
     }
+  },
+  "dependencies": {
+    "yaml": "^2.9.1"
+  },
+  "scripts": {
+    "test": "node --test *.test.cjs"
   }
 }
