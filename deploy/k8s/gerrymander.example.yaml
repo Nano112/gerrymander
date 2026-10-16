@@ -76,6 +76,8 @@ data:
       enabled: true
       zones: [example.com]
       auto_register: true
+      retire_missing: false # opt in to retire disappeared observations
+      missing_grace_period: 5m
       interval: 60s
     # Write-side (off by default): materialize IngressRoutes for allocations
     # whose spec carries a `service` backend. Requires the wider RBAC above.

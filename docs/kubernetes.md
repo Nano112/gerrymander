@@ -19,7 +19,7 @@ expose them. The daemon refuses to start off-loopback with no API key.
 
 ## 1. Observer (read-only audit)
 
-Polls IngressRoutes / Ingresses / HTTPRoutes and compares them with the
+Polls Traefik IngressRoutes and Kubernetes Ingresses and compares them with the
 registry:
 
 - unregistered hostnames → auto-registered as platform allocations (or
@@ -31,7 +31,58 @@ registry:
   traffic)
 
 Conflicts appear at `/v1/conflicts`, as `gerry_conflicts` metrics, and as
-Prometheus alerts. The observer never mutates anything it observes.
+Prometheus alerts. The observer never mutates Kubernetes resources.
+
+### Retiring disappeared hosts
+
+Temporary routes (for example streaming sessions) otherwise accumulate active
+registry records after Kubernetes deletes them. Enable reconciliation explicitly:
+
+```yaml
+observer:
+  enabled: true
+  zones: [yourdomain.com]
+  auto_register: true
+  retire_missing: true       # default false; requires auto_register
+  missing_grace_period: 5m   # default 5m
+  interval: 60s
+```
+
+Helm exposes these as `observer.retireMissing` and
+`observer.missingGracePeriod`. Start with retirement disabled to inspect
+`status.observation` and the missing-host metric, then back up the registry
+before enabling it for an existing installation. Existing records receive a
+fresh absence window; their age is never evidence of disappearance.
+
+Only active `source=observed`, `kind=platform` allocations without routing
+backends or reservation expiry qualify. API claims, seed reservations and
+tenant allocations are excluded. A host must be absent from **both complete,
+paginated lists**, across at least three successful observations and the full
+grace period. Failed requests, malformed lists, expired/repeated pagination
+tokens, changed resource versions, restarts and gaps over two polling intervals
+reset the absence window. No retirement occurs from partial results.
+
+Identity uses zone plus label, including wildcard labels and nested zones,
+so an owner replacement or another route serving the same host keeps the
+allocation alive. `status.observation` exposes `last_seen_at`, `owner_uid`,
+`missing_since` and `missing_observations`. Rediscovery clears absence state.
+
+Retirement atomically writes a `retire-missing` event containing the complete
+allocation snapshot, then frees the label for a future claim or rediscovery.
+Kubernetes routes are never deleted by this process. The existing `hold_ttl`
+continues to apply only to pending reservations. This observer setting does
+not enable expiry for local development or API-managed services.
+
+Metrics on the dedicated metrics listener:
+
+- `gerry_observer_last_success_timestamp_seconds` — last complete successful sync
+- `gerry_observer_errors_total` — failed cycles
+- `gerry_observed_hosts_missing{zone}` — absent records awaiting retirement
+- `gerry_observed_hosts_retired_total{zone}` — completed audited retirements
+
+For an enabled observer, alert when the last successful sync is more than a
+few polling intervals old. Missing counts can rise briefly during normal
+session churn; sustained growth with no retirements warrants investigation.
 
 ## 2. Actuator (write-side, off by default)
 

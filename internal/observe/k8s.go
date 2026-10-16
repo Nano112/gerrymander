@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -45,7 +46,8 @@ func InClusterConfig() (K8sConfig, error) {
 }
 
 // Observer polls cluster routes, imports platform hosts, and reports
-// conflicts. It never deletes or mutates anything it observes.
+// conflicts. It never mutates Kubernetes resources. Optional retirement only
+// releases registry records imported by this observer.
 type Observer struct {
 	Store *store.Store
 	Cfg   K8sConfig
@@ -53,9 +55,14 @@ type Observer struct {
 	Zones []string
 	// AutoRegister creates kind=platform allocations for unregistered
 	// observed hosts. When false, they are reported instead.
-	AutoRegister bool
-	Interval     time.Duration
-	Log          *slog.Logger
+	AutoRegister       bool
+	RetireMissing      bool
+	MissingGracePeriod time.Duration
+	Now                func() time.Time
+	cycleMu            sync.Mutex
+	lastSuccess        time.Time
+	Interval           time.Duration
+	Log                *slog.Logger
 
 	client *http.Client
 	mu     sync.Mutex
@@ -122,9 +129,15 @@ func (o *Observer) get(ctx context.Context, path string, into any) error {
 }
 
 // Minimal shapes for list responses.
+type listMetadata struct {
+	Continue        string `json:"continue"`
+	ResourceVersion string `json:"resourceVersion"`
+}
 type ingressRouteList struct {
-	Items []struct {
+	Metadata listMetadata `json:"metadata"`
+	Items    []struct {
 		Metadata struct {
+			UID       string            `json:"uid"`
 			Namespace string            `json:"namespace"`
 			Name      string            `json:"name"`
 			Labels    map[string]string `json:"labels"`
@@ -143,8 +156,10 @@ type ingressRouteList struct {
 }
 
 type ingressList struct {
-	Items []struct {
+	Metadata listMetadata `json:"metadata"`
+	Items    []struct {
 		Metadata struct {
+			UID       string `json:"uid"`
 			Namespace string `json:"namespace"`
 			Name      string `json:"name"`
 		} `json:"metadata"`
@@ -159,40 +174,73 @@ type ingressList struct {
 // FetchRoutes lists IngressRoutes + Ingresses as ObservedRoutes.
 func (o *Observer) FetchRoutes(ctx context.Context) ([]ObservedRoute, error) {
 	var routes []ObservedRoute
-	var irs ingressRouteList
-	if err := o.get(ctx, "/apis/traefik.io/v1alpha1/ingressroutes?limit=1000", &irs); err != nil {
-		return nil, fmt.Errorf("ingressroutes: %w", err)
-	}
-	for _, item := range irs.Items {
-		for _, r := range item.Spec.Routes {
-			or := ObservedRoute{
-				Namespace: item.Metadata.Namespace, Name: item.Metadata.Name,
-				Kind: "IngressRoute", Match: r.Match, Priority: r.Priority,
-				Hosts:   ParseMatch(r.Match),
-				Managed: item.Metadata.Labels[actuate.ManagedLabel] == "true",
+	for _, resource := range []string{"/apis/traefik.io/v1alpha1/ingressroutes", "/apis/networking.k8s.io/v1/ingresses"} {
+		continuation, version := "", ""
+		tokens := map[string]bool{}
+		for {
+			path := resource + "?limit=1000"
+			if continuation != "" {
+				path += "&continue=" + url.QueryEscape(continuation)
 			}
-			if len(r.Services) > 0 {
-				or.Service = item.Metadata.Namespace + "/" + r.Services[0].Name
+			var meta listMetadata
+			if strings.HasSuffix(resource, "/ingressroutes") {
+				var list ingressRouteList
+				if err := o.get(ctx, path, &list); err != nil {
+					return nil, err
+				}
+				if list.Items == nil {
+					return nil, fmt.Errorf("%s: missing items in list", resource)
+				}
+				meta = list.Metadata
+				for _, item := range list.Items {
+					for _, r := range item.Spec.Routes {
+						observed := ObservedRoute{
+							Namespace: item.Metadata.Namespace, Name: item.Metadata.Name, UID: item.Metadata.UID,
+							Kind: "IngressRoute", Match: r.Match, Priority: r.Priority,
+							Hosts: ParseMatch(r.Match), Managed: item.Metadata.Labels[actuate.ManagedLabel] == "true",
+						}
+						if len(r.Services) > 0 {
+							observed.Service = item.Metadata.Namespace + "/" + r.Services[0].Name
+						}
+						routes = append(routes, observed)
+					}
+				}
+			} else {
+				var list ingressList
+				if err := o.get(ctx, path, &list); err != nil {
+					return nil, err
+				}
+				if list.Items == nil {
+					return nil, fmt.Errorf("%s: missing items in list", resource)
+				}
+				meta = list.Metadata
+				for _, item := range list.Items {
+					seen := map[string]bool{}
+					for _, rule := range item.Spec.Rules {
+						if rule.Host == "" || seen[rule.Host] {
+							continue
+						}
+						seen[rule.Host] = true
+						routes = append(routes, ObservedRoute{
+							Namespace: item.Metadata.Namespace, Name: item.Metadata.Name, UID: item.Metadata.UID,
+							Kind: "Ingress", Match: "Host(`" + rule.Host + "`)",
+							Hosts: []HostPattern{{Host: strings.ToLower(rule.Host), Exact: true, Raw: "ingress"}},
+						})
+					}
+				}
 			}
-			routes = append(routes, or)
-		}
-	}
-	var ings ingressList
-	if err := o.get(ctx, "/apis/networking.k8s.io/v1/ingresses?limit=1000", &ings); err != nil {
-		return nil, fmt.Errorf("ingresses: %w", err)
-	}
-	for _, item := range ings.Items {
-		seen := map[string]bool{}
-		for _, rule := range item.Spec.Rules {
-			if rule.Host == "" || seen[rule.Host] {
-				continue
+			if continuation != "" && meta.ResourceVersion != version {
+				return nil, fmt.Errorf("%s: resource version changed during pagination", resource)
 			}
-			seen[rule.Host] = true
-			routes = append(routes, ObservedRoute{
-				Namespace: item.Metadata.Namespace, Name: item.Metadata.Name,
-				Kind: "Ingress", Match: "Host(`" + rule.Host + "`)",
-				Hosts: []HostPattern{{Host: strings.ToLower(rule.Host), Exact: true, Raw: "ingress"}},
-			})
+			version = meta.ResourceVersion
+			if meta.Continue == "" {
+				break
+			}
+			if tokens[meta.Continue] {
+				return nil, fmt.Errorf("%s: repeated continuation token", resource)
+			}
+			tokens[meta.Continue] = true
+			continuation = meta.Continue
 		}
 	}
 	return routes, nil
@@ -200,15 +248,44 @@ func (o *Observer) FetchRoutes(ctx context.Context) ([]ObservedRoute, error) {
 
 // Sync runs one observe cycle: import, conflict detection, shadow check.
 func (o *Observer) Sync(ctx context.Context) error {
+	o.cycleMu.Lock()
+	defer o.cycleMu.Unlock()
 	routes, err := o.FetchRoutes(ctx)
-	if err != nil {
-		return err
+	if err == nil {
+		err = o.reconcile(ctx, routes)
 	}
-	return o.Reconcile(ctx, routes)
+	if err != nil {
+		o.lastSuccess = time.Time{}
+	}
+	api.RecordObserverSync(err == nil)
+	return err
 }
 
-// Reconcile applies one snapshot of routes (separated from Sync for tests).
+// Reconcile applies a complete successful snapshot (separated for tests).
 func (o *Observer) Reconcile(ctx context.Context, routes []ObservedRoute) error {
+	o.cycleMu.Lock()
+	defer o.cycleMu.Unlock()
+	err := o.reconcile(ctx, routes)
+	if err != nil {
+		o.lastSuccess = time.Time{}
+	}
+	return err
+}
+
+func (o *Observer) reconcile(ctx context.Context, routes []ObservedRoute) error {
+	now := time.Now().UTC()
+	if o.Now != nil {
+		now = o.Now().UTC()
+	}
+	interval := o.Interval
+	if interval <= 0 {
+		interval = time.Minute
+	}
+	grace := o.MissingGracePeriod
+	if grace <= 0 {
+		grace = 5 * time.Minute
+	}
+	resetMissing := o.lastSuccess.IsZero() || now.Before(o.lastSuccess) || now.Sub(o.lastSuccess) > 2*interval
 	var conflicts []Conflict
 	unregistered := map[string]int{}
 
@@ -218,10 +295,8 @@ func (o *Observer) Reconcile(ctx context.Context, routes []ObservedRoute) error 
 			return err
 		}
 		seenLabels := map[string]string{} // label → ns/name
+		present := map[string]store.ObservedOwner{}
 		for _, r := range routes {
-			if r.Managed {
-				continue // gerry's own actuator output — never classify it
-			}
 			for _, h := range r.Hosts {
 				var label string
 				var ok bool
@@ -237,6 +312,13 @@ func (o *Observer) Reconcile(ctx context.Context, routes []ObservedRoute) error 
 					continue
 				}
 				if !ok {
+					continue
+				}
+				if _, exists := present[label]; !exists || !r.Managed {
+					present[label] = store.ObservedOwner{Ref: r.Namespace + "/" + r.Name, Kind: r.Kind, UID: r.UID, Service: r.Service}
+				}
+				if r.Managed {
+					// Keep a live host, but never import/classify actuator output.
 					continue
 				}
 				if prev, dup := seenLabels[label]; dup && prev != r.Namespace+"/"+r.Name {
@@ -264,7 +346,7 @@ func (o *Observer) Reconcile(ctx context.Context, routes []ObservedRoute) error 
 							Labels: map[string]string{"observed-service": r.Service},
 						})
 						if cerr != nil && !errors.Is(cerr, store.ErrTaken) {
-							o.logf("auto-register %s.%s: %v", label, zoneName, cerr)
+							return fmt.Errorf("auto-register %s.%s: %w", label, zoneName, cerr)
 						}
 					} else {
 						unregistered[zoneName]++
@@ -279,6 +361,16 @@ func (o *Observer) Reconcile(ctx context.Context, routes []ObservedRoute) error 
 						Related: "tenant owner_ref=" + existing.OwnerRef,
 					})
 				}
+			}
+		}
+		if o.AutoRegister {
+			result, err := o.Store.ReconcileObservations(ctx, zoneName, present, now, grace, o.RetireMissing, resetMissing)
+			if err != nil {
+				return fmt.Errorf("reconcile observed hosts in %s: %w", zoneName, err)
+			}
+			api.SetObservationMetrics(zoneName, result.Missing, result.Retired)
+			if result.Retired > 0 {
+				o.logf("retired %d missing observed hosts in %s (%d awaiting grace)", result.Retired, zoneName, result.Missing)
 			}
 		}
 		conflicts = append(conflicts, ShadowCheck(zoneName, routes)...)
@@ -299,6 +391,7 @@ func (o *Observer) Reconcile(ctx context.Context, routes []ObservedRoute) error 
 		api.SetConflictGauge(z, perZone[z])
 		api.SetUnregisteredGauge(z, unregistered[z])
 	}
+	o.lastSuccess = now
 	return nil
 }
 

@@ -63,15 +63,17 @@ type Config struct {
 		Enabled  *bool         `yaml:"enabled"`
 		Interval time.Duration `yaml:"interval"` // default 5s
 	} `yaml:"docker_labels"`
-	Observer  struct {
-		Enabled      bool          `yaml:"enabled"`
-		Zones        []string      `yaml:"zones"`
-		AutoRegister bool          `yaml:"auto_register"`
-		Interval     time.Duration `yaml:"interval"`
-		APIServer    string        `yaml:"api_server"` // empty → in-cluster
-		TokenFile    string        `yaml:"token_file"`
-		CAFile       string        `yaml:"ca_file"`
-		Insecure     bool          `yaml:"insecure"`
+	Observer struct {
+		Enabled            bool          `yaml:"enabled"`
+		Zones              []string      `yaml:"zones"`
+		AutoRegister       bool          `yaml:"auto_register"`
+		RetireMissing      bool          `yaml:"retire_missing"`
+		MissingGracePeriod time.Duration `yaml:"missing_grace_period"`
+		Interval           time.Duration `yaml:"interval"`
+		APIServer          string        `yaml:"api_server"` // empty → in-cluster
+		TokenFile          string        `yaml:"token_file"`
+		CAFile             string        `yaml:"ca_file"`
+		Insecure           bool          `yaml:"insecure"`
 	} `yaml:"observer"`
 	// Actuator writes Traefik IngressRoutes for registry claims that carry
 	// service backends. Off by default; it shares the observer's cluster
@@ -177,6 +179,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Observer.Interval <= 0 {
 		c.Observer.Interval = time.Minute
+	}
+	if c.Observer.MissingGracePeriod <= 0 {
+		c.Observer.MissingGracePeriod = 5 * time.Minute
 	}
 	if c.HoldTTL <= 0 {
 		c.HoldTTL = 15 * time.Minute

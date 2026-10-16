@@ -200,6 +200,7 @@ func cmdServe(args []string) error {
 		obs = &observe.Observer{
 			Store: st, Cfg: k8s, Zones: cfg.Observer.Zones,
 			AutoRegister: cfg.Observer.AutoRegister, Interval: cfg.Observer.Interval, Log: log,
+			RetireMissing: cfg.Observer.RetireMissing, MissingGracePeriod: cfg.Observer.MissingGracePeriod,
 		}
 		go obs.Run(ctx)
 	}

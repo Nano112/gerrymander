@@ -22,6 +22,8 @@ data:
       enabled: {{ .Values.observer.enabled }}
       zones: [{{- range $i, $z := .Values.zones }}{{ if $i }}, {{ end }}{{ $z.name }}{{- end }}]
       auto_register: {{ .Values.observer.autoRegister }}
+      retire_missing: {{ .Values.observer.retireMissing }}
+      missing_grace_period: {{ .Values.observer.missingGracePeriod }}
       interval: {{ .Values.observer.interval }}
     actuator:
       enabled: {{ .Values.actuator.enabled }}
