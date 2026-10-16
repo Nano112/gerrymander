@@ -22,6 +22,17 @@ func (m *Manifest) RoutingProject() string {
 }
 func (m *Manifest) OwnerRef(service string) string { return m.RoutingProject() + "/" + service }
 
+// ManagesRoutes distinguishes metadata-only manifests from an intentionally
+// empty routing manifest (which can still prune all of its previous routes).
+func (m *Manifest) ManagesRoutes() bool {
+	for _, s := range m.Services {
+		if !s.CatalogOnly {
+			return true
+		}
+	}
+	return len(m.Services) == 0 && len(m.Resources) == 0
+}
+
 func stableID(prefix string, parts ...string) string {
 	return fmt.Sprintf("%s:%x", prefix, sha256.Sum256([]byte(strings.Join(parts, "\x00"))))
 }

@@ -62,12 +62,11 @@ func (s *Server) handleManifestApply(w http.ResponseWriter, r *http.Request) {
 		catalogError(w, err)
 		return
 	}
-	if m.Zone != "" {
+	if m.Zone != "" && m.ManagesRoutes() {
 		if _, err := s.Store.EnsureZone(ctx, core.Zone{Name: m.Zone, Profile: "dev", WildcardMode: true}); err != nil {
 			writeErr(w, 500, "internal", err.Error())
 			return
 		}
-
 	}
 	ports := map[string]int{} // ownerRef → sticky value
 	resolvePort := func(pool, ownerRef string) (int, error) {
@@ -128,7 +127,7 @@ func (s *Server) handleManifestApply(w http.ResponseWriter, r *http.Request) {
 		resp.Updated = append(resp.Updated, existing.FQDN)
 	}
 
-	if m.Zone != "" && (req.Prune == nil || *req.Prune) {
+	if m.Zone != "" && m.ManagesRoutes() && (req.Prune == nil || *req.Prune) {
 		owned, err := s.Store.ListAllocations(ctx, store.AllocFilter{Zone: m.Zone, Project: m.RoutingProject(), ExcludeReleased: true})
 		if err != nil {
 			writeErr(w, 500, "internal", err.Error())
@@ -174,7 +173,8 @@ func (s *Server) handleManifestApply(w http.ResponseWriter, r *http.Request) {
 		catalogError(w, err)
 		return
 	}
-	if req.Prune == nil || *req.Prune {
+	// A resource-only update does not declare ownership of service deployments.
+	if (len(m.Services) > 0 || len(m.Resources) == 0) && (req.Prune == nil || *req.Prune) {
 		snapshot, err := s.Store.Catalog(ctx, bundle.Application.ID)
 		if err != nil {
 			writeErr(w, 500, "internal", err.Error())

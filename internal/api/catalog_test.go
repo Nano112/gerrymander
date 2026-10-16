@@ -189,4 +189,24 @@ func TestCatalogOnlyDoesNotPruneRoutes(t *testing.T) {
 	if len(out["allocations"].([]any)) != 2 {
 		t.Fatal("catalog-only declaration pruned routes")
 	}
+	// An explicit zone can classify metadata; it must not imply routing ownership.
+	if code, out := applyManifest(t, ts.URL, "project: coolsite\nzone: coolsite.test\nresources:\n  uploads:\n    kind: object-storage\n"); code != 200 {
+		t.Fatalf("zoned resources: %d %v", code, out)
+	}
+	snap, err := catalog.NewClient(ts.URL, "").Snapshot(t.Context(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range snap.Deployments {
+		if d.Lifecycle != "registered" {
+			t.Fatal("resource update retired existing service")
+		}
+	}
+	if code, out := applyManifest(t, ts.URL, "project: coolsite\nzone: coolsite.test\nservices:\n  external:\n    catalog_only: true\n"); code != 200 {
+		t.Fatalf("zoned metadata: %d %v", code, out)
+	}
+	_, out = doJSON(t, "GET", ts.URL+"/v1/allocations", "", "")
+	if len(out["allocations"].([]any)) != 2 {
+		t.Fatal("zoned metadata pruned routes")
+	}
 }
