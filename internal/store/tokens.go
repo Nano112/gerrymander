@@ -28,9 +28,10 @@ type Token struct {
 // ScopeOwner tokens are confined to tenant claims for one owner_ref.
 // ScopeCatalogRead can read catalog metadata and assets across the registry.
 const (
-	ScopeAdmin       = "admin"
-	ScopeOwner       = "owner"
-	ScopeCatalogRead = "catalog-read"
+	ScopeAdmin        = "admin"
+	ScopeOwner        = "owner"
+	ScopeCatalogRead  = "catalog-read"
+	ScopeCatalogWrite = "catalog-write"
 )
 
 func hashToken(plaintext string) string {
@@ -40,14 +41,14 @@ func hashToken(plaintext string) string {
 
 // CreateToken mints a token and returns its plaintext exactly once.
 func (s *Store) CreateToken(ctx context.Context, name, scope, ownerRef string, zones []string) (Token, string, error) {
-	if scope != ScopeAdmin && scope != ScopeOwner && scope != ScopeCatalogRead {
-		return Token{}, "", errors.New("scope must be admin, owner or catalog-read")
+	if scope != ScopeAdmin && scope != ScopeOwner && scope != ScopeCatalogRead && scope != ScopeCatalogWrite {
+		return Token{}, "", errors.New("scope must be admin, owner, catalog-read or catalog-write")
 	}
 	if scope == ScopeOwner && ownerRef == "" {
 		return Token{}, "", errors.New("owner-scoped tokens need an owner_ref")
 	}
-	if scope == ScopeCatalogRead && (ownerRef != "" || len(zones) != 0) {
-		return Token{}, "", errors.New("catalog-read is registry-wide; owner_ref and zones are not supported")
+	if (scope == ScopeCatalogRead || scope == ScopeCatalogWrite) && (ownerRef != "" || len(zones) != 0) {
+		return Token{}, "", errors.New("catalog scopes are registry-wide; owner_ref and zones are not supported")
 	}
 	raw := make([]byte, 24)
 	if _, err := rand.Read(raw); err != nil {

@@ -14,8 +14,8 @@ func (s *Server) catalogRead(next http.HandlerFunc) http.HandlerFunc {
 	return s.auth(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		p := principalFrom(r)
-		if !p.admin() && p.Scope != store.ScopeCatalogRead {
-			writeErr(w, 403, "forbidden", "catalog reads require admin or catalog-read scope")
+		if !p.admin() && p.Scope != store.ScopeCatalogRead && p.Scope != store.ScopeCatalogWrite {
+			writeErr(w, 403, "forbidden", "catalog reads require a catalog or admin scope")
 			return
 		}
 		next(w, r)
@@ -133,4 +133,15 @@ func (s *Server) handleDeactivateCatalogDeployment(w http.ResponseWriter, r *htt
 		return
 	}
 	w.WriteHeader(204)
+}
+
+func (s *Server) catalogWrite(next http.HandlerFunc) http.HandlerFunc {
+	return s.auth(func(w http.ResponseWriter, r *http.Request) {
+		p := principalFrom(r)
+		if !p.admin() && p.Scope != store.ScopeCatalogWrite {
+			writeErr(w, 403, "forbidden", "catalog publication requires admin or catalog-write scope")
+			return
+		}
+		next(w, r)
+	})
 }

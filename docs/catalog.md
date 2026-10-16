@@ -206,3 +206,8 @@ continue checks if the catalog is unavailable, while displaying discovery age.
 Container builds publish immutable `ghcr.io/nano112/gerrymander:sha-<commit>`
 tags for amd64 and arm64 after tests pass. Production deployments should pin a
 reviewed image digest. This workflow does not change running clusters.
+
+Scheduled inventory publishers can use `catalog-write` tokens. They can read and
+publish catalog metadata/assets and retire deployments, but cannot change
+routing, ports, zones, processes or credentials. Like `catalog-read`, the scope
+is registry-wide; it is not a per-application authorization boundary.

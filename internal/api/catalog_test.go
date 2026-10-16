@@ -47,6 +47,29 @@ func TestCatalogScopes(t *testing.T) {
 	}
 }
 
+func TestCatalogWriterCannotAdministerRoutes(t *testing.T) {
+	ts := testServer(t, "root")
+	resp, body := doJSON(t, "POST", ts.URL+"/v1/tokens", "root", `{"name":"publisher","scope":"catalog-write"}`)
+	if resp.StatusCode != 201 {
+		t.Fatalf("mint writer: %v", body)
+	}
+	key := body["plaintext"].(string)
+	resp, body = doJSON(t, "POST", ts.URL+"/v1/catalog/apply", key, `{"schema_version":1,"application":{"id":"writer-app","project":"writer","display":{"name":"Writer"}}}`)
+	if resp.StatusCode != 200 {
+		t.Fatalf("catalog write: %v", body)
+	}
+	for _, path := range []string{"/v1/claims", "/v1/tokens", "/v1/manifest/apply", "/v1/zones", "/v1/ports"} {
+		resp, _ := doJSON(t, "POST", ts.URL+path, key, `{}`)
+		if resp.StatusCode != 403 {
+			t.Fatalf("publisher reached %s: %d", path, resp.StatusCode)
+		}
+	}
+	resp, _ = doJSON(t, "GET", ts.URL+"/v1/catalog", key, "")
+	if resp.StatusCode != 200 {
+		t.Fatal("writer cannot read catalog")
+	}
+}
+
 func TestCatalogSDKAndAssets(t *testing.T) {
 	ts := testServer(t, "root")
 	c := catalog.NewClient(ts.URL, "root")

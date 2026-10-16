@@ -14,7 +14,7 @@ import (
 func cmdToken(args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf(`usage:
-  gerry token create <name> [--scope owner|admin|catalog-read] [--owner-ref REF] [--zone Z]...
+  gerry token create <name> [--scope owner|admin|catalog-read|catalog-write] [--owner-ref REF] [--zone Z]...
   gerry token ls
   gerry token revoke <name>`)
 	}
@@ -25,7 +25,7 @@ func cmdToken(args []string) error {
 	switch sub {
 	case "create":
 		fs := flag.NewFlagSet("token create", flag.ExitOnError)
-		scope := fs.String("scope", "owner", "owner (confined to --owner-ref), admin, or catalog-read (registry-wide)")
+		scope := fs.String("scope", "owner", "owner (confined to --owner-ref), admin, catalog-read or catalog-write (registry-wide)")
 		ownerRef := fs.String("owner-ref", "", "owner this token acts as (required for owner scope)")
 		var zones multiFlag
 		fs.Var(&zones, "zone", "zone the token may touch (repeatable; empty = all)")

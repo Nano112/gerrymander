@@ -175,10 +175,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/ports", s.adminOnly(s.handleClaimPort))
 	mux.HandleFunc("GET /v1/catalog", s.catalogRead(s.handleCatalog))
 	mux.HandleFunc("GET /v1/catalog/access", s.catalogRead(s.handleAccessCatalog))
-	mux.HandleFunc("POST /v1/catalog/apply", s.adminOnly(s.handleApplyCatalog))
-	mux.HandleFunc("POST /v1/catalog/assets", s.adminOnly(s.handleUploadCatalogAsset))
+	mux.HandleFunc("POST /v1/catalog/apply", s.catalogWrite(s.handleApplyCatalog))
+	mux.HandleFunc("POST /v1/catalog/assets", s.catalogWrite(s.handleUploadCatalogAsset))
 	mux.HandleFunc("GET /v1/catalog/assets/{id}", s.catalogRead(s.handleCatalogAsset))
-	mux.HandleFunc("POST /v1/catalog/deployments/{id}/deactivate", s.adminOnly(s.handleDeactivateCatalogDeployment))
+	mux.HandleFunc("POST /v1/catalog/deployments/{id}/deactivate", s.catalogWrite(s.handleDeactivateCatalogDeployment))
 	mux.HandleFunc("POST /v1/manifest/apply", s.adminOnly(s.handleManifestApply))
 	mux.HandleFunc("GET /v1/conflicts", s.adminOnly(s.handleConflicts))
 	mux.HandleFunc("GET /v1/processes", s.adminOnly(s.handleProcesses))
@@ -254,8 +254,8 @@ func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 			writeErr(w, 401, "unauthorized", "missing or invalid API key")
 			return
 		}
-		if p.Scope == store.ScopeCatalogRead && r.URL.Path != "/v1/catalog" && !strings.HasPrefix(r.URL.Path, "/v1/catalog/") {
-			writeErr(w, 403, "forbidden", "catalog-read tokens cannot access routing or administration")
+		if (p.Scope == store.ScopeCatalogRead || p.Scope == store.ScopeCatalogWrite) && r.URL.Path != "/v1/catalog" && !strings.HasPrefix(r.URL.Path, "/v1/catalog/") {
+			writeErr(w, 403, "forbidden", "catalog tokens cannot access routing or administration")
 			return
 		}
 		next(w, r.WithContext(context.WithValue(r.Context(), principalKey{}, p)))
