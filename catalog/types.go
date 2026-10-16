@@ -45,17 +45,18 @@ type Capabilities struct {
 }
 
 type Deployment struct {
-	ID                string   `json:"id" yaml:"id,omitempty"`
-	ApplicationID     string   `json:"application_id" yaml:"-"`
-	ServiceID         string   `json:"service_id" yaml:"-"`
-	Environment       string   `json:"environment" yaml:"-"`
-	Workspace         string   `json:"workspace,omitempty" yaml:"-"`
-	Zone              string   `json:"zone,omitempty" yaml:"-"`
-	OwnerRef          string   `json:"owner_ref,omitempty" yaml:"-"`
-	Hostnames         []string `json:"hostnames,omitempty" yaml:"-"`
-	LaunchURL         string   `json:"launch_url,omitempty" yaml:"launch_url,omitempty"`
-	CapabilityVersion string   `json:"capability_version,omitempty" yaml:"capability_version,omitempty"`
-	Lifecycle         string   `json:"lifecycle" yaml:"-"` // registered | inactive; never a health assertion
+	Checks            []HTTPCheck `json:"checks,omitempty" yaml:"checks,omitempty"`
+	ID                string      `json:"id" yaml:"id,omitempty"`
+	ApplicationID     string      `json:"application_id" yaml:"-"`
+	ServiceID         string      `json:"service_id" yaml:"-"`
+	Environment       string      `json:"environment" yaml:"-"`
+	Workspace         string      `json:"workspace,omitempty" yaml:"-"`
+	Zone              string      `json:"zone,omitempty" yaml:"-"`
+	OwnerRef          string      `json:"owner_ref,omitempty" yaml:"-"`
+	Hostnames         []string    `json:"hostnames,omitempty" yaml:"-"`
+	LaunchURL         string      `json:"launch_url,omitempty" yaml:"launch_url,omitempty"`
+	CapabilityVersion string      `json:"capability_version,omitempty" yaml:"capability_version,omitempty"`
+	Lifecycle         string      `json:"lifecycle" yaml:"-"` // registered | inactive; never a health assertion
 }
 
 // Resource describes a declared, non-routed project dependency. Discovery of
@@ -182,7 +183,20 @@ func (b Bundle) Validate() error {
 			}
 		}
 	}
+	checkIDs := map[string]bool{}
 	for _, d := range b.Deployments {
+		if len(d.Checks) > 20 {
+			return fmt.Errorf("too many HTTP checks")
+		}
+		for _, c := range d.Checks {
+			if err := c.Validate(); err != nil {
+				return err
+			}
+			if checkIDs[c.ID] {
+				return fmt.Errorf("duplicate HTTP check id %s", c.ID)
+			}
+			checkIDs[c.ID] = true
+		}
 		if !ValidID(d.ID) || ids[d.ID] || d.ApplicationID != b.Application.ID || !services[d.ServiceID] || !ValidID(d.Environment) || (d.Workspace != "" && !ValidID(d.Workspace)) {
 			return fmt.Errorf("invalid deployment %q", d.ID)
 		}

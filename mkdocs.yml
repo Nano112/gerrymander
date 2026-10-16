@@ -23,6 +23,7 @@ theme:
 nav:
   - Home: index.md
   - Quickstart: quickstart.md
+  - Application & service catalog: catalog.md
   - Local dev:
       - Frameworks: frameworks.md
       - Host mode: host-mode.md

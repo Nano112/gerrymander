@@ -190,3 +190,19 @@ use `GERRY_TEST_POSTGRES_DSN=... go test -race ./internal/store -run TestCatalog
 they create and remove isolated schemas in the specified test database. CI also
 runs those tests against PostgreSQL 16 and exercises the Laravel SDK with
 `composer install && php tests/catalog.php` in `clients/laravel`.
+
+## Uptime check definitions
+
+Deployments can declare optional `checks` with a stable `id`, `name`, HTTP(S)
+`url`, description, accepted `statuses` (default 200), `contains`, scalar `json`
+expectations, and a `redirect` expectation (`origin` and YAML `path_prefix`;
+JSON `pathPrefix`). Consumers choose which environments and networks to probe.
+No check is inferred from a hostname or tenant allocation, and Gerry never runs
+checks. Probe credentials remain with the monitoring consumer. Check ids must be
+unique within each application bundle; consumers also reject collisions across
+applications. Independent monitors should persist a last-known-good snapshot and
+continue checks if the catalog is unavailable, while displaying discovery age.
+
+Container builds publish immutable `ghcr.io/nano112/gerrymander:sha-<commit>`
+tags for amd64 and arm64 after tests pass. Production deployments should pin a
+reviewed image digest. This workflow does not change running clusters.
