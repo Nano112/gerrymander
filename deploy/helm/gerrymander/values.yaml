@@ -17,6 +17,9 @@ apiKeySecret:
 observer:
   enabled: true
   autoRegister: true
+  # Opt in after reviewing observer-owned allocations; never deletes cluster routes.
+  retireMissing: false
+  missingGracePeriod: 5m
   interval: 60s
 
 # Write-side. Off by default — read the docs before enabling.

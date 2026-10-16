@@ -25,7 +25,7 @@ jobs:
           go-version-file: go.mod
       - run: go vet ./...
       - run: go test -race ./...
-      - run: go test -race ./internal/store -run TestCatalog -count=1
+      - run: go test -race ./internal/store -run 'TestCatalog|TestObservation' -count=1
         env:
           GERRY_TEST_POSTGRES_DSN: postgres://postgres:postgres@localhost:5432/gerry_catalog_test?sslmode=disable
   vite:

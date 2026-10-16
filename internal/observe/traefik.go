@@ -48,6 +48,7 @@ func ParseMatch(match string) []HostPattern {
 
 // ObservedRoute is one route as seen in the cluster.
 type ObservedRoute struct {
+	UID       string
 	Namespace string
 	Name      string
 	Kind      string // IngressRoute | Ingress

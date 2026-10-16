@@ -146,9 +146,18 @@ type ConditionStatus struct {
 	At      time.Time `json:"at"`
 }
 
-// Status is the observed state of an allocation.
+// ObservationStatus records successful Kubernetes sightings and absence evidence.
+type ObservationStatus struct {
+	LastSeenAt          *time.Time `json:"last_seen_at,omitempty"`
+	MissingSince        *time.Time `json:"missing_since,omitempty"`
+	MissingObservations int        `json:"missing_observations,omitempty"`
+	OwnerUID            string     `json:"owner_uid,omitempty"`
+}
+
+// Status contains routing conditions and the observer-owned lifecycle.
 type Status struct {
-	Conditions []ConditionStatus `json:"conditions,omitempty"`
+	Conditions  []ConditionStatus  `json:"conditions,omitempty"`
+	Observation *ObservationStatus `json:"observation,omitempty"`
 }
 
 // SetCondition upserts a condition by type.
