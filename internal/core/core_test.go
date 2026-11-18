@@ -13,7 +13,7 @@ func TestNormalizeBasics(t *testing.T) {
 		want string
 		err  bool
 	}{
-		{"GV", KindTenant, "gv", false},
+		{"DEMO", KindTenant, "demo", false},
 		{"  acme  ", KindTenant, "acme", false},
 		{"@", KindPlatform, "@", false},
 		{"rt.staging", KindPlatform, "rt.staging", false},
@@ -26,7 +26,7 @@ func TestNormalizeBasics(t *testing.T) {
 		{strings.Repeat("a", 64), KindTenant, "", true}, // too long
 		{"münchen", KindTenant, "xn--mnchen-3ya", false}, // IDN
 		{"ＡＣＭＥ", KindTenant, "acme", false},              // NFKC fold of fullwidth
-		{"*.cb.app", KindPlatform, "*.cb.app", false},    // platform wildcard
+		{"*.preview.app", KindPlatform, "*.preview.app", false},    // platform wildcard
 		{"*.foo", KindTenant, "", true},                  // tenant wildcard rejected
 	}
 	for _, c := range cases {
@@ -49,7 +49,7 @@ func TestNormalizeBasics(t *testing.T) {
 
 // The unique index is only honest if normalization is idempotent.
 func TestNormalizeIdempotent(t *testing.T) {
-	seeds := []string{"GV", "münchen", "ＡＣＭＥ", "rt.staging", "@", "*.cb.app", "foo-bar", "xn--mnchen-3ya"}
+	seeds := []string{"DEMO", "münchen", "ＡＣＭＥ", "rt.staging", "@", "*.preview.app", "foo-bar", "xn--mnchen-3ya"}
 	for _, s := range seeds {
 		for _, kind := range []Kind{KindTenant, KindPlatform} {
 			once, err := Normalize(s, kind)
@@ -136,10 +136,10 @@ func TestSuggest(t *testing.T) {
 }
 
 func TestFQDN(t *testing.T) {
-	if FQDN("gv", "olsyn.com") != "gv.olsyn.com" {
+	if FQDN("demo", "example.com") != "demo.example.com" {
 		t.Error("label fqdn")
 	}
-	if FQDN("@", "olsyn.com") != "olsyn.com" {
+	if FQDN("@", "example.com") != "example.com" {
 		t.Error("apex fqdn")
 	}
 }

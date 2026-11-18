@@ -173,8 +173,6 @@ consumer's authenticated origin; do not expose registry tokens in browser URLs.
 Multiple registered deployments of a service can appear in the same scope;
 consumers must group by service id or choose a deployment explicitly.
 
-The infra portal and Olsyn Service Access can now adopt this contract. This update
-does not migrate their existing configuration or switch their authorization.
 Desktop routing views continue to use allocations; catalog metadata is available
 to local tools through the CLI and the same API.
 

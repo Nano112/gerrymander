@@ -7,9 +7,9 @@ import (
 
 func TestParseLsof(t *testing.T) {
 	sample := `COMMAND   PID     USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
-node    54321 harrison   23u  IPv4 0xdeadbeef      0t0  TCP 127.0.0.1:5173 (LISTEN)
-node    54321 harrison   24u  IPv6 0xdeadbeef      0t0  TCP [::1]:5173 (LISTEN)
-postgres  777 harrison    7u  IPv4 0xdeadbeef      0t0  TCP *:54320 (LISTEN)
+node    54321 devuser   23u  IPv4 0xdeadbeef      0t0  TCP 127.0.0.1:5173 (LISTEN)
+node    54321 devuser   24u  IPv6 0xdeadbeef      0t0  TCP [::1]:5173 (LISTEN)
+postgres  777 devuser    7u  IPv4 0xdeadbeef      0t0  TCP *:54320 (LISTEN)
 `
 	ls := parseLsof(sample)
 	if len(ls) != 2 {

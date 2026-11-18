@@ -3,7 +3,7 @@ package main
 import "testing"
 
 func TestServeTerminates443(t *testing.T) {
-	trap := `https://macbook.stalk-dinosaur.ts.net (tailnet only)
+	trap := `https://macbook.example.ts.net (tailnet only)
 |-- / proxy https+insecure://127.0.0.1:443
 `
 	if !serveTerminates443(trap) {
@@ -11,10 +11,10 @@ func TestServeTerminates443(t *testing.T) {
 	}
 
 	// passthrough + an 8443 app handler: the healthy shape must NOT flag
-	healthy := `https://macbook.stalk-dinosaur.ts.net:8443 (tailnet only)
+	healthy := `https://macbook.example.ts.net:8443 (tailnet only)
 |-- / proxy http://127.0.0.1:51005
 
-|-- tcp://macbook.stalk-dinosaur.ts.net:443 (TLS over TCP)
+|-- tcp://macbook.example.ts.net:443 (TLS over TCP)
 |--> tcp://127.0.0.1:443
 `
 	if serveTerminates443(healthy) {
@@ -24,9 +24,9 @@ func TestServeTerminates443(t *testing.T) {
 
 func TestSplitDNSRoutes(t *testing.T) {
 	out := `Split DNS Routes:
-  - mac-mini                       -> 100.71.144.24
-  - test                           -> 100.103.181.67
-  - ts.net.                        -> 199.247.155.53
+  - mac-mini                       -> 192.0.2.10
+  - test                           -> 192.0.2.11
+  - ts.net.                        -> 192.0.2.53
 
 Search Domains:
 `
@@ -41,7 +41,7 @@ Search Domains:
 		t.Fatalf("invented a route: %v", r)
 	}
 	// The target is what makes a hijacked zone diagnosable.
-	if r["test"] != "100.103.181.67" {
+	if r["test"] != "192.0.2.11" {
 		t.Fatalf("target not captured: %q", r["test"])
 	}
 	// Nothing outside the section, and no bare-domain entries without one.

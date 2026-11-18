@@ -159,6 +159,10 @@ Experimental or beta, stated plainly: the Cloudflare DNS writer is
 mock-tested but has not run against a live zone, and the Windows binaries
 are cross-compiled but not yet exercised on a real Windows machine.
 
+## Contributing examples
+
+Use fictional projects, example.test or example.com hostnames, and documentation IP addresses in examples and tests. Record demos against synthetic data. Keep local deployment settings, backups, and paths to other checkouts outside the repository.
+
 ## License
 
 MIT

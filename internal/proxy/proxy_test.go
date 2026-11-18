@@ -32,10 +32,10 @@ func seedProxyStore(t *testing.T) *store.Store {
 	}
 	t.Cleanup(func() { st.Close() })
 	ctx := context.Background()
-	z, _ := st.EnsureZone(ctx, core.Zone{Name: "olsyn.test", Profile: "dev"})
+	z, _ := st.EnsureZone(ctx, core.Zone{Name: "example.test", Profile: "dev"})
 	mk := func(label string, spec core.Spec) {
 		if _, err := st.CreateAllocation(ctx, core.Allocation{
-			ZoneID: z.ID, Label: label, FQDN: core.FQDN(strings.TrimPrefix(label, "*."), "olsyn.test"),
+			ZoneID: z.ID, Label: label, FQDN: core.FQDN(strings.TrimPrefix(label, "*."), "example.test"),
 			Kind: core.KindPlatform, Source: core.SourceManifest, State: core.StateActive, Spec: spec,
 		}); err != nil {
 			t.Fatal(err)
@@ -62,14 +62,14 @@ func TestTableResolution(t *testing.T) {
 		port int
 		want string // backend host, "" = miss
 	}{
-		{"olsyn.test", 443, "app-main"},
-		{"olsyn.test", 80, "app-main"},
-		{"gv.olsyn.test", 443, "app-main"},    // wildcard
-		{"a.b.olsyn.test", 443, "app-main"},   // deep wildcard match
-		{"special.olsyn.test", 443, "special-app"}, // exact beats wildcard
-		{"olsyn.test", 5175, "app-vite"},      // port-specific route
-		{"gv.olsyn.test", 5175, "app-vite"},   // wildcard + port route
-		{"special.olsyn.test", 5174, ""},      // no route for that port
+		{"example.test", 443, "app-main"},
+		{"example.test", 80, "app-main"},
+		{"demo.example.test", 443, "app-main"},    // wildcard
+		{"a.b.example.test", 443, "app-main"},   // deep wildcard match
+		{"special.example.test", 443, "special-app"}, // exact beats wildcard
+		{"example.test", 5175, "app-vite"},      // port-specific route
+		{"demo.example.test", 5175, "app-vite"},   // wildcard + port route
+		{"special.example.test", 5174, ""},      // no route for that port
 		{"other.test", 443, ""},               // unknown zone
 	}
 	for _, c := range cases {
@@ -93,17 +93,17 @@ func TestTableResolution(t *testing.T) {
 func TestPendingHoldsDoNotRoute(t *testing.T) {
 	st := seedProxyStore(t)
 	ctx := context.Background()
-	z, _ := st.GetZone(ctx, "olsyn.test")
+	z, _ := st.GetZone(ctx, "example.test")
 	exp := time.Now().Add(time.Hour)
 	st.CreateAllocation(ctx, core.Allocation{
-		ZoneID: z.ID, Label: "held", FQDN: "held.olsyn.test", Kind: core.KindTenant,
+		ZoneID: z.ID, Label: "held", FQDN: "held.example.test", Kind: core.KindTenant,
 		Source: core.SourceAPI, State: core.StatePending, ExpiresAt: &exp,
 		Spec: core.Spec{Routes: []core.Route{{Backend: addrBackend("nope", 80)}}},
 	})
 	tbl := &Table{}
 	tbl.Rebuild(ctx, st)
 	// wildcard still routes it to app-main (the catch-all), not the hold
-	got, ok := tbl.Resolve("held.olsyn.test", 443)
+	got, ok := tbl.Resolve("held.example.test", 443)
 	if !ok || got.Backend.Address.Host != "app-main" {
 		t.Fatalf("held label: got %+v ok=%v", got, ok)
 	}
@@ -114,7 +114,7 @@ func TestLeafMintAndCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	l1, err := ca.Leaf("gv.olsyn.test")
+	l1, err := ca.Leaf("demo.example.test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,10 +122,10 @@ func TestLeafMintAndCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if leaf.DNSNames[0] != "gv.olsyn.test" {
+	if leaf.DNSNames[0] != "demo.example.test" {
 		t.Fatalf("SAN: %v", leaf.DNSNames)
 	}
-	l2, _ := ca.Leaf("gv.olsyn.test")
+	l2, _ := ca.Leaf("demo.example.test")
 	if l1 != l2 {
 		t.Fatal("leaf not cached")
 	}

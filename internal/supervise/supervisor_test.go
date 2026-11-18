@@ -41,7 +41,7 @@ func slowServer(delay string) *core.SupervisedBackend {
 
 func TestColdStartHoldsRequest(t *testing.T) {
 	m := testManager(t)
-	alloc := core.Allocation{FQDN: "vite.olsyn.test"}
+	alloc := core.Allocation{FQDN: "vite.example.test"}
 	start := time.Now()
 	addr, err := m.Ensure(context.Background(), alloc, slowServer("0.5"))
 	if err != nil {
@@ -69,7 +69,7 @@ func TestColdStartHoldsRequest(t *testing.T) {
 
 func TestIdleSleepAndRestart(t *testing.T) {
 	m := testManager(t)
-	alloc := core.Allocation{FQDN: "sleepy.olsyn.test"}
+	alloc := core.Allocation{FQDN: "sleepy.example.test"}
 	spec := slowServer("0")
 	spec.IdleTimeout = core.Duration(300 * time.Millisecond)
 	addr, err := m.Ensure(context.Background(), alloc, spec)
@@ -96,7 +96,7 @@ func TestIdleSleepAndRestart(t *testing.T) {
 func TestCrashLoopParks(t *testing.T) {
 	m := testManager(t)
 	m.HealthTimeout = 700 * time.Millisecond
-	alloc := core.Allocation{FQDN: "crashy.olsyn.test"}
+	alloc := core.Allocation{FQDN: "crashy.example.test"}
 	spec := &core.SupervisedBackend{Cmd: "exit 1", Dir: "/tmp"}
 	for i := 0; i < crashThreshold; i++ {
 		if _, err := m.Ensure(context.Background(), alloc, spec); err == nil {
@@ -111,10 +111,10 @@ func TestCrashLoopParks(t *testing.T) {
 func TestLogsCaptured(t *testing.T) {
 	m := testManager(t)
 	m.HealthTimeout = 700 * time.Millisecond
-	alloc := core.Allocation{FQDN: "logger.olsyn.test"}
+	alloc := core.Allocation{FQDN: "logger.example.test"}
 	m.Ensure(context.Background(), alloc, &core.SupervisedBackend{Cmd: "echo hello-from-proc; exit 1", Dir: "/tmp"})
 	time.Sleep(200 * time.Millisecond)
-	lines, err := m.Logs("logger.olsyn.test", 10)
+	lines, err := m.Logs("logger.example.test", 10)
 	if err != nil {
 		t.Fatal(err)
 	}

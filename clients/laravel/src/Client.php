@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Http;
  * Config (config/gerrymander.php or env):
  *   GERRY_API      base URL, e.g. http://gerrymander.gerrymander.svc:4780
  *   GERRY_API_KEY  bearer token
- *   GERRY_ZONE     default zone, e.g. olsyn.com
+ *   GERRY_ZONE     default zone, e.g. example.com
  *
  * With GERRY_API unset the client is inert — see enabled(). That is the
  * supported way to run the app in CI, in tests, or on a machine where the

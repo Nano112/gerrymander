@@ -35,7 +35,7 @@ UI alongside everything you made by hand.
 ```yaml
 npm_sync:
   enabled: true
-  url: http://100.71.144.24:81       # the NPM admin API
+  url: http://192.0.2.10:81       # the NPM admin API
   # identity_env: NPM_IDENTITY        (defaults shown)
   # secret_env:   NPM_SECRET
   local_host: host.docker.internal    # what "@local" forwards to

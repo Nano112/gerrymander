@@ -29,7 +29,7 @@ use Stancl\Tenancy\Events\DomainDeleted;
  *   validation rule already failed closed at the form, and blocking every
  *   admin flow on a registry outage is worse than the tiny race window.
  * - Domains outside the configured zone (custom domains, .test locals when
- *   the zone is olsyn.com) and multi-level labels are skipped.
+ *   the zone is example.com) and multi-level labels are skipped.
  */
 class SyncTenantDomain
 {
@@ -49,7 +49,7 @@ class SyncTenantDomain
         }
         $label = substr($domain, 0, -strlen('.'.$zone));
         if ($label === '' || str_contains($label, '.')) {
-            return; // legacy multi-level forms (gv.app.…) live under platform wildcards
+            return; // legacy multi-level forms (demo.app.…) live under platform wildcards
         }
 
         try {

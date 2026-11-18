@@ -730,7 +730,7 @@ func cmdRelease(args []string) error {
 
 // cmdRename supports both spellings:
 //
-//	gerry rename gv.olsyn.test newname     (positional, human)
+//	gerry rename demo.example.test newname     (positional, human)
 //	gerry rename --id 12 --label newname   (flags, scripts)
 func cmdRename(args []string) error {
 	fs := flag.NewFlagSet("rename", flag.ExitOnError)

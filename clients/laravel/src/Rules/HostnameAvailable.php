@@ -19,7 +19,7 @@ use Illuminate\Contracts\Validation\ValidationRule;
  * names instead of failing every submission.
  *
  * Usage:
- *   'subdomain' => ['required', new HostnameAvailable('olsyn.com')]
+ *   'subdomain' => ['required', new HostnameAvailable('example.com')]
  */
 class HostnameAvailable implements ValidationRule
 {

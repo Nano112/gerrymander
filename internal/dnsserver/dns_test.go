@@ -19,7 +19,7 @@ func TestWildcardAnswers(t *testing.T) {
 	addr := pc.LocalAddr().String()
 	pc.Close()
 
-	s := New([]string{"olsyn.test"}, addr, nil)
+	s := New([]string{"example.test"}, addr, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go s.Run(ctx)
@@ -36,18 +36,18 @@ func TestWildcardAnswers(t *testing.T) {
 		return resp
 	}
 
-	r := query("anything.olsyn.test", dns.TypeA)
+	r := query("anything.example.test", dns.TypeA)
 	if len(r.Answer) != 1 {
 		t.Fatalf("wildcard A: %+v", r)
 	}
 	if a, ok := r.Answer[0].(*dns.A); !ok || a.A.String() != "127.0.0.1" {
 		t.Fatalf("A record: %+v", r.Answer[0])
 	}
-	r = query("deep.nested.olsyn.test", dns.TypeAAAA)
+	r = query("deep.nested.example.test", dns.TypeAAAA)
 	if len(r.Answer) != 1 {
 		t.Fatalf("AAAA: %+v", r)
 	}
-	r = query("olsyn.test", dns.TypeA)
+	r = query("example.test", dns.TypeA)
 	if len(r.Answer) != 1 {
 		t.Fatal("apex should answer")
 	}

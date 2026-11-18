@@ -141,7 +141,7 @@ func TestSpecStatusRoundTrip(t *testing.T) {
 	z, _ := s.EnsureZone(ctx, core.Zone{Name: "rt.test"})
 	a := core.Allocation{
 		ZoneID: z.ID, Label: "app", FQDN: "app.rt.test", Kind: core.KindPlatform, Source: core.SourceSeed, State: core.StateActive,
-		Spec: core.Spec{Wildcard: true, Routes: []core.Route{{Listen: 0, Backend: core.Backend{Kind: "address", Address: &core.AddressBackend{Host: "olsyn-app", Port: 80, PreserveHost: true}}}, {Listen: 5175, Backend: core.Backend{Kind: "address", Address: &core.AddressBackend{Host: "olsyn-app", Port: 5175}}}}},
+		Spec: core.Spec{Wildcard: true, Routes: []core.Route{{Listen: 0, Backend: core.Backend{Kind: "address", Address: &core.AddressBackend{Host: "example-app", Port: 80, PreserveHost: true}}}, {Listen: 5175, Backend: core.Backend{Kind: "address", Address: &core.AddressBackend{Host: "example-app", Port: 5175}}}}},
 		Labels: map[string]string{"note": "caddy-parity"},
 	}
 	created, err := s.CreateAllocation(ctx, a)
@@ -155,7 +155,7 @@ func TestSpecStatusRoundTrip(t *testing.T) {
 	if !got.Spec.Wildcard || len(got.Spec.Routes) != 2 || got.Spec.Routes[1].Listen != 5175 {
 		t.Fatalf("spec did not round-trip: %+v", got.Spec)
 	}
-	if got.Spec.Routes[0].Backend.Address.Host != "olsyn-app" || !got.Spec.Routes[0].Backend.Address.PreserveHost {
+	if got.Spec.Routes[0].Backend.Address.Host != "example-app" || !got.Spec.Routes[0].Backend.Address.PreserveHost {
 		t.Fatalf("backend did not round-trip: %+v", got.Spec.Routes[0].Backend)
 	}
 	got.Status.SetCondition(core.ConditionStatus{Type: core.CondReady, Status: true, At: time.Now()})
