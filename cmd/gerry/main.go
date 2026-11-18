@@ -44,6 +44,7 @@ import (
 	"github.com/Nano112/gerrymander/internal/npmsync"
 	"github.com/Nano112/gerrymander/internal/observe"
 	"github.com/Nano112/gerrymander/internal/proxy"
+	"github.com/Nano112/gerrymander/internal/rexlink"
 	"github.com/Nano112/gerrymander/internal/service"
 	"github.com/Nano112/gerrymander/internal/store"
 	"github.com/Nano112/gerrymander/internal/supervise"
@@ -383,7 +384,17 @@ func cmdServe(args []string) error {
 		if sup != nil {
 			starter = sup
 		}
+		hosts, err := rexlink.Load()
+		if err != nil {
+			return err
+		}
+		rexRouter, err := rexlink.NewRouter(ctx, hosts)
+		if err != nil {
+			return err
+		}
+		defer rexRouter.Close()
 		p := proxy.New(st, ca, starter, proxy.Options{
+			Rex:      rexRouter,
 			HTTPAddr: cfg.Proxy.HTTP, TLSAddr: cfg.Proxy.TLS,
 			ExtraTLSPorts: cfg.Proxy.ExtraTLSPorts, Log: log,
 		})
@@ -853,6 +864,12 @@ func cmdDev(args []string) error {
 		shell = "/bin/sh"
 	}
 
+	serviceURL := func(host string) string {
+		if isTTY(os.Stderr) && os.Getenv("REX_SESSION") != "" {
+			return rexlink.TerminalLink(os.Getenv("GERRY_REX_HOST"), host)
+		}
+		return "https://" + host
+	}
 	// Single service: plain foreground exec, stdio attached.
 	if len(run) == 1 {
 		name := run[0]
@@ -862,9 +879,9 @@ func cmdDev(args []string) error {
 		}
 		if hosts := applied.Services[name].Hostnames; len(hosts) > 0 {
 			if port != 0 {
-				fmt.Fprintf(os.Stderr, "gerry: https://%s → :%d\n", hosts[0], port)
+				fmt.Fprintf(os.Stderr, "gerry: %s → :%d\n", serviceURL(hosts[0]), port)
 			} else {
-				fmt.Fprintf(os.Stderr, "gerry: https://%s\n", hosts[0])
+				fmt.Fprintf(os.Stderr, "gerry: %s\n", serviceURL(hosts[0]))
 			}
 		}
 		cmd := exec.Command(shell, shellFlag, substPort(m.Services[name].Dev, port))
@@ -912,7 +929,7 @@ func cmdDev(args []string) error {
 		color := colors[i%len(colors)]
 		prefix := fmt.Sprintf("%s%-*s |%s ", color, width, name, reset)
 		if hosts := applied.Services[name].Hostnames; len(hosts) > 0 {
-			fmt.Fprintf(os.Stderr, "%sgerry: https://%s → :%d\n", prefix, hosts[0], port)
+			fmt.Fprintf(os.Stderr, "%sgerry: %s → :%d\n", prefix, serviceURL(hosts[0]), port)
 		}
 		cmd := exec.CommandContext(runCtx, shell, shellFlag, substPort(m.Services[name].Dev, port))
 		cmd.Env = devEnv(port)

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/Nano112/gerrymander/internal/core"
+	"github.com/Nano112/gerrymander/internal/rexlink"
 	"github.com/Nano112/gerrymander/internal/store"
 )
 
@@ -35,6 +36,7 @@ type DockerResolver interface {
 
 // Options configure the proxy.
 type Options struct {
+	Rex *rexlink.Router
 	// HTTPAddr serves the redirect listener ("" disables), e.g. ":80".
 	HTTPAddr string
 	// TLSAddr is the main TLS listener, e.g. ":443".
@@ -145,6 +147,9 @@ func (p *Proxy) handler(listenPort int) http.Handler {
 		}
 		target, ok := p.table.Resolve(r.Host, listenPort)
 		if !ok {
+			if listenPort == 443 && p.opts.Rex != nil && p.opts.Rex.Serve(w, r, strings.ToLower(host)) {
+				return
+			}
 			writeUnknownHost(w, r, host, listenPort, p.table.Zones())
 			return
 		}

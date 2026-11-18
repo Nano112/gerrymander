@@ -66,3 +66,66 @@ let whichever machine you're on claim it in that machine's zone — or use
 pattern 1 so the claim lives in one registry regardless of where you
 type. Sticky ports are per-registry: pattern 1 gives you the same port
 everywhere, pattern 2 gives each machine its own.
+
+## Open a remote service in Rex on macOS
+
+The experimental Rex integration lets each viewer choose a local suffix for a
+remote host. For example, starting a service on the server prints
+`https://drive.example.test/`. Command-clicking the link opens
+`https://drive.example.dev/` on the viewer's Mac. One loopback Rex forward
+carries requests for the mapped zone to the remote Gerry HTTPS proxy. Gerry
+uses the original hostname for upstream TLS and HTTP routing.
+
+### One-time setup
+
+1. Use a Rex client and server with TCP tunnel support. This flow was tested
+   with Rex 0.1.0-preview.21 on both ends. The viewer needs the Gerry daemon
+   and macOS desktop app from this branch. Open the desktop app once to
+   register its `gerry://` handler.
+2. In the remote shell environment, set `GERRY_REX_HOST=mini`. This is the
+   lookup key that each viewer configures. In an interactive Rex session,
+   `gerry dev` and the updated Gerry Vite plugin print clickable service URLs.
+3. On the viewer, create `~/.gerrymander/rex-hosts.json`:
+
+   ```json
+   {
+     "mini": {
+       "server": "mac-mini",
+       "session": "work",
+       "remote_zone": "example.test",
+       "local_zone": "example.dev",
+       "proxy_port": 443,
+       "ca_cert": "/Users/you/.gerrymander/mini-root.crt",
+       "rex": "/Applications/Rex Beta.app/Contents/Helpers/Rex Server.rex/Contents/MacOS/rex"
+     }
+   }
+   ```
+
+   Use the server label from the viewer's Rex host list and an existing remote
+   session for the tunnel. A session can be omitted when Rex can select one
+   unambiguously. Set `proxy_port` to the remote Gerry HTTPS listener, which
+   may be 8444 on a machine that shares port 443 with another proxy. Copy the
+   remote Gerry **public root certificate** to `ca_cert`. The viewer's browser
+   uses the viewer's usual Gerry CA. The optional `rex` path selects the binary
+   when the daemon's PATH does not contain the desired Rex version.
+4. Configure the viewer's DNS to resolve the specific local zone
+   (`example.dev` and its subdomains) to loopback. With Gerry's embedded DNS
+   on macOS, include that zone in `dns.zones` and route the zone to its local
+   listener with a matching `/etc/resolver/example.dev` entry. Enable the
+   viewer's Gerry HTTPS proxy on loopback port 443 and restart its daemon to
+   load the mapping.
+
+### Daily use
+
+Run the usual dev script on the remote machine and Command-click the **Gerry**
+URL in its output. Rex may ask before opening a custom-scheme link. The first
+local HTTPS request starts a forward. Subsequent requests, including WebSocket
+upgrades, reuse it. Existing local Gerry routes take precedence. Set app-specific
+absolute URLs, cookie domains and redirects for the local alias where needed.
+The Vite plugin uses the browser's hostname for HMR in Rex mode. Applications
+with their own Vite configuration should also use the browser's hostname.
+
+To change the mapping, edit the viewer's host file and restart its daemon.
+Removing the entry and restarting closes the managed forward. For isolated
+setups, both the daemon and desktop app support an alternate config path via
+`GERRY_REX_HOSTS`.

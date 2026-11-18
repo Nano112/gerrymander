@@ -68,6 +68,9 @@ function tailnetNames() {
 }
 
 function gerrymander(options = {}) {
+  const key = process.env.GERRY_REX_HOST || "";
+  const dnsName = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+  const rexLinks = Boolean(process.env.REX_SESSION && dnsName.test(key));
   let primaryHost = null;
   let stickyPort = null;
 
@@ -133,11 +136,10 @@ function gerrymander(options = {}) {
           host: "127.0.0.1",
           ...(stickyPort ? { port: stickyPort, strictPort: true } : {}),
           allowedHosts,
-          origin: `https://${primaryHost}`,
+          ...(rexLinks ? {} : { origin: `https://${primaryHost}` }),
           hmr: {
             protocol: "wss",
-            host: primaryHost,
-            clientPort: 443,
+            ...(rexLinks ? {} : { host: primaryHost, clientPort: 443 }),
           },
         },
       };
@@ -147,8 +149,12 @@ function gerrymander(options = {}) {
       if (!primaryHost) return;
       server.httpServer?.once("listening", () => {
         setTimeout(() => {
+          const url = `https://${primaryHost}/`;
+          const link = rexLinks && process.stdout.isTTY && dnsName.test(primaryHost)
+            ? `\x1b]8;;gerry://${key}/${primaryHost}/\x1b\\${url}\x1b]8;;\x1b\\`
+            : url;
           server.config.logger.info(
-            `  \x1b[32m➜\x1b[0m  \x1b[1mgerrymander\x1b[0m: https://${primaryHost}/  \x1b[2m(sticky port ${stickyPort})\x1b[0m`,
+            `  \x1b[32m➜\x1b[0m  \x1b[1mgerrymander\x1b[0m: ${link}  \x1b[2m(sticky port ${stickyPort})\x1b[0m`,
           );
         }, 60);
       });

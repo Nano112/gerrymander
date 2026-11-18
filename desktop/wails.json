@@ -6,6 +6,7 @@
   "frontend:build": "npm run build",
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "auto",
+  "info": {"protocols": [{"scheme": "gerry", "description": "Gerry service link", "role": "Viewer"}]},
   "author": {
     "name": "Harrison",
     "email": "35530362+Nano112@users.noreply.github.com"
