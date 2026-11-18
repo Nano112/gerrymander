@@ -26,7 +26,7 @@ func TestMCPGoldenFlow(t *testing.T) {
 	ports.SkipBindTest = true
 	alloc := service.NewAlloc(st, ports)
 	ctx := context.Background()
-	st.EnsureZone(ctx, core.Zone{Name: "olsyn.test"})
+	st.EnsureZone(ctx, core.Zone{Name: "example.test"})
 	ports.EnsureDefaultPool(ctx)
 	ts := httptest.NewServer((&api.Server{Store: st, Alloc: alloc, Ports: ports}).Handler())
 	defer ts.Close()
@@ -36,7 +36,7 @@ func TestMCPGoldenFlow(t *testing.T) {
 		`{"jsonrpc":"2.0","id":2,"method":"tools/list"}`,
 		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"claim_port","arguments":{"owner_ref":"agent-proj"}}}`,
 		`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"claim_port","arguments":{"owner_ref":"agent-proj"}}}`,
-		`{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"check_availability","arguments":{"zone":"olsyn.test","label":"grafana"}}}`,
+		`{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"check_availability","arguments":{"zone":"example.test","label":"grafana"}}}`,
 	}, "\n") + "\n"
 	var out bytes.Buffer
 	s := &Server{API: client.New(ts.URL, ""), In: strings.NewReader(in), Out: &out}

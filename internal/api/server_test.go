@@ -24,7 +24,7 @@ func testServer(t *testing.T, apiKey string) *httptest.Server {
 	ports.SkipBindTest = true
 	alloc := service.NewAlloc(st, ports)
 	ctx := t.Context()
-	st.EnsureZone(ctx, core.Zone{Name: "olsyn.com"})
+	st.EnsureZone(ctx, core.Zone{Name: "example.com"})
 	ports.EnsureDefaultPool(ctx)
 	srv := &Server{Store: st, Alloc: alloc, Ports: ports, APIKey: apiKey}
 	ts := httptest.NewServer(srv.Handler())
@@ -92,13 +92,13 @@ func TestClaimFlow(t *testing.T) {
 	ts := testServer(t, "")
 
 	// claim
-	resp, body := doJSON(t, "POST", ts.URL+"/v1/claims", "", `{"zone":"olsyn.com","label":"acme","owner_ref":"t1"}`)
+	resp, body := doJSON(t, "POST", ts.URL+"/v1/claims", "", `{"zone":"example.com","label":"acme","owner_ref":"t1"}`)
 	if resp.StatusCode != 201 {
 		t.Fatalf("claim: %d %v", resp.StatusCode, body)
 	}
 
 	// duplicate → 409 with reason + suggestions
-	resp, body = doJSON(t, "POST", ts.URL+"/v1/claims", "", `{"zone":"olsyn.com","label":"acme"}`)
+	resp, body = doJSON(t, "POST", ts.URL+"/v1/claims", "", `{"zone":"example.com","label":"acme"}`)
 	if resp.StatusCode != 409 || body["error"] != "taken" {
 		t.Fatalf("dup claim: %d %v", resp.StatusCode, body)
 	}
@@ -107,13 +107,13 @@ func TestClaimFlow(t *testing.T) {
 	}
 
 	// blocked label → 409 blocked
-	resp, body = doJSON(t, "POST", ts.URL+"/v1/claims", "", `{"zone":"olsyn.com","label":"grafana"}`)
+	resp, body = doJSON(t, "POST", ts.URL+"/v1/claims", "", `{"zone":"example.com","label":"grafana"}`)
 	if resp.StatusCode != 409 || body["error"] != "blocked" {
 		t.Fatalf("blocked claim: %d %v", resp.StatusCode, body)
 	}
 
 	// availability
-	resp, body = doJSON(t, "GET", ts.URL+"/v1/zones/olsyn.com/availability?label=acme", "", "")
+	resp, body = doJSON(t, "GET", ts.URL+"/v1/zones/example.com/availability?label=acme", "", "")
 	if resp.StatusCode != 200 || body["available"] != false || body["reason"] != "taken" {
 		t.Fatalf("availability: %d %v", resp.StatusCode, body)
 	}
@@ -122,7 +122,7 @@ func TestClaimFlow(t *testing.T) {
 func TestIdempotencyReplay(t *testing.T) {
 	ts := testServer(t, "")
 	req := func() (*http.Response, map[string]any) {
-		r, _ := http.NewRequest("POST", ts.URL+"/v1/claims", strings.NewReader(`{"zone":"olsyn.com","label":"idem"}`))
+		r, _ := http.NewRequest("POST", ts.URL+"/v1/claims", strings.NewReader(`{"zone":"example.com","label":"idem"}`))
 		r.Header.Set("Idempotency-Key", "abc-123")
 		resp, err := http.DefaultClient.Do(r)
 		if err != nil {
@@ -168,14 +168,14 @@ func TestPortsAPI(t *testing.T) {
 
 func TestReleaseEndpoint(t *testing.T) {
 	ts := testServer(t, "")
-	_, body := doJSON(t, "POST", ts.URL+"/v1/claims", "", `{"zone":"olsyn.com","label":"gone"}`)
+	_, body := doJSON(t, "POST", ts.URL+"/v1/claims", "", `{"zone":"example.com","label":"gone"}`)
 	id := int64(body["allocation"].(map[string]any)["id"].(float64))
 	req, _ := http.NewRequest("DELETE", ts.URL+"/v1/allocations/"+jsonNum(id), nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil || resp.StatusCode != 204 {
 		t.Fatalf("release: %v %d", err, resp.StatusCode)
 	}
-	r2, av := doJSON(t, "GET", ts.URL+"/v1/zones/olsyn.com/availability?label=gone", "", "")
+	r2, av := doJSON(t, "GET", ts.URL+"/v1/zones/example.com/availability?label=gone", "", "")
 	if r2.StatusCode != 200 || av["available"] != true {
 		t.Fatalf("after release: %v", av)
 	}

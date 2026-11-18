@@ -304,7 +304,7 @@ func (o *Observer) reconcile(ctx context.Context, routes []ObservedRoute) error 
 				case h.Exact:
 					label, ok = LabelForZone(h.Host, zoneName)
 				case h.CatchAll && h.Suffix != zoneName && strings.HasSuffix(h.Suffix, "."+zoneName):
-					// e.g. ^[a-z0-9-]+\.cb\.app\.olsyn\.com$ → "*.cb.app"
+					// e.g. ^[a-z0-9-]+\.preview\.app\.example\.com$ → "*.preview.app"
 					label, ok = "*."+strings.TrimSuffix(h.Suffix, "."+zoneName), true
 				case h.CatchAll && h.Suffix == zoneName:
 					continue // the tenant catch-all itself is not an ownable label

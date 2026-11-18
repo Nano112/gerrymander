@@ -32,8 +32,8 @@ type Service struct {
 	Capabilities *catalog.Capabilities `yaml:"capabilities,omitempty"`
 	Deployment   catalog.Deployment    `yaml:"deployment,omitempty"`
 	CatalogOnly  bool                  `yaml:"catalog_only,omitempty"`
-	// Hostnames within the zone. "olsyn.test" = apex, "*.olsyn.test" =
-	// wildcard, "vite.olsyn.test" = a label. Multiple entries collapse
+	// Hostnames within the zone. "example.test" = apex, "*.example.test" =
+	// wildcard, "vite.example.test" = a label. Multiple entries collapse
 	// into apex+wildcard on the same allocation when possible.
 	Hostnames []string `yaml:"hostnames"`
 	// Listen restricts the shorthand backend to specific proxy ports

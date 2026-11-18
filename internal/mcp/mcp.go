@@ -56,9 +56,9 @@ func str(desc string) map[string]any { return map[string]any{"type": "string", "
 
 var tools = []toolDef{
 	{"claim_hostname", "Claim a hostname label in a zone. Returns the allocation or a conflict with suggestions.",
-		obj(map[string]any{"zone": str("zone name, e.g. olsyn.test"), "label": str("label to claim, e.g. myapp"), "owner_ref": str("stable owner id, e.g. project name")}, "zone", "label")},
+		obj(map[string]any{"zone": str("zone name, e.g. example.test"), "label": str("label to claim, e.g. myapp"), "owner_ref": str("stable owner id, e.g. project name")}, "zone", "label")},
 	{"claim_port", "Claim a sticky dev port. The same owner_ref always receives the same port — safe to write into config files.",
-		obj(map[string]any{"owner_ref": str("stable owner id, e.g. 'olsyn-web/vite'"), "pool": str("pool name (default 'dev')")}, "owner_ref")},
+		obj(map[string]any{"owner_ref": str("stable owner id, e.g. 'example-web/vite'"), "pool": str("pool name (default 'dev')")}, "owner_ref")},
 	{"check_availability", "Check whether a label is claimable in a zone; returns reason and suggestions when not.",
 		obj(map[string]any{"zone": str("zone name"), "label": str("candidate label")}, "zone", "label")},
 	{"list_claims", "List allocations, optionally filtered by zone/owner_ref.",

@@ -16,7 +16,7 @@ import (
 // loopback; SetAdvertise swaps in another address (e.g. this machine's
 // tailnet IP) so peers that route these zones here get a reachable answer.
 type Server struct {
-	zones []string // e.g. ["test"] or ["olsyn.test"]
+	zones []string // e.g. ["test"] or ["example.test"]
 	addr  string
 	log   *slog.Logger
 	srvs  []*dns.Server

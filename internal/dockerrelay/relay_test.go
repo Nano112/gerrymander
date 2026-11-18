@@ -7,7 +7,7 @@ import (
 )
 
 func TestRelayNamingDeterministic(t *testing.T) {
-	d := core.DockerBackend{Network: "dev-proxy", Host: "olsyn-app", Port: 80}
+	d := core.DockerBackend{Network: "dev-proxy", Host: "example-app", Port: 80}
 	if RelayName(d) != RelayName(d) {
 		t.Fatal("relay name not deterministic")
 	}

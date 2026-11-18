@@ -12,3 +12,5 @@ desktop/desktop
 # machine-local daemon config + project manifests (see *.example.yaml)
 deploy/dev/gerry.yaml
 deploy/dev/manifests/
+deploy/dev/*.bak
+deploy/dev/compose.override.yml

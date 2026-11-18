@@ -31,7 +31,7 @@ const Marker = "# gerrymander-managed"
 type Sync struct {
 	Store *store.Store
 	Zones []string
-	// URL of the NPM admin API, e.g. http://100.71.144.24:81
+	// URL of the NPM admin API, e.g. http://192.0.2.10:81
 	URL string
 	// Identity/Secret are the NPM admin login; a short-lived token is
 	// minted from them and refreshed on 401.

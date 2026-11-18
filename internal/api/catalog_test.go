@@ -26,7 +26,7 @@ func TestCatalogScopes(t *testing.T) {
 		{"GET", "/v1/catalog/access", "", 400}, {"POST", "/v1/catalog/apply", "{}", 403},
 		{"POST", "/v1/catalog/assets", "{}", 403}, {"POST", "/v1/catalog/deployments/x/deactivate", "", 403},
 		{"GET", "/v1/allocations", "", 403}, {"GET", "/v1/zones", "", 403},
-		{"POST", "/v1/claims", `{"zone":"olsyn.com","label":"oops"}`, 403},
+		{"POST", "/v1/claims", `{"zone":"example.com","label":"oops"}`, 403},
 		{"GET", "/v1/dns", "", 403}, {"POST", "/v1/manifest/apply", "{}", 403},
 		{"POST", "/v1/ports", "{}", 403}, {"GET", "/v1/tokens", "", 403},
 	} {

@@ -13,8 +13,8 @@ return [
     // Bearer token. Empty for a loopback daemon.
     'key' => env('GERRY_API_KEY'),
 
-    // Default zone for availability checks and claims (olsyn.com in prod,
-    // olsyn.test locally).
+    // Default zone for availability checks and claims (example.com in prod,
+    // example.test locally).
     'zone' => env('GERRY_ZONE'),
 
     // Master switch. With no API configured every Client call is a no-op, so

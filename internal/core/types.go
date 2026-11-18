@@ -50,7 +50,7 @@ const (
 	CondConflict   = "Conflict"
 )
 
-// Zone is a namespace of labels (e.g. "olsyn.com", "olsyn.test").
+// Zone is a namespace of labels (e.g. "example.com", "example.test").
 type Zone struct {
 	ID             int64     `json:"id"`
 	Name           string    `json:"name"`
@@ -73,7 +73,7 @@ type ServiceBackend struct {
 // AddressBackend targets a host:port. Port may reference a sticky pool
 // allocation instead of a literal value.
 type AddressBackend struct {
-	Host string `json:"host"`           // e.g. "olsyn-app", "127.0.0.1"
+	Host string `json:"host"`           // e.g. "example-app", "127.0.0.1"
 	Port int    `json:"port,omitempty"` // literal port
 	// PortPool, when set, resolves the port from the owner's sticky
 	// allocation in this pool at claim time.

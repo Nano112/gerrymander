@@ -146,7 +146,7 @@ type TreeNode struct {
 }
 
 // GetTree returns zones → allocations, nesting multi-level labels so
-// "flow.schemati.test" sits under "schemati.test".
+// "flow.example.test" sits under "example.test".
 func (a *App) GetTree() ([]TreeNode, error) {
 	var zones struct {
 		Zones []core.Zone `json:"zones"`
@@ -375,7 +375,7 @@ func (a *App) GetProjects() ([]ProjectView, error) {
 
 // MapEdge is one routed connection from a hostname to a backend.
 type MapEdge struct {
-	Backend string `json:"backend"` // canonical backend id, e.g. "olsyn-app:80"
+	Backend string `json:"backend"` // canonical backend id, e.g. "example-app:80"
 	Listen  int    `json:"listen"`  // 0 = default 443/80
 }
 
@@ -394,7 +394,7 @@ type MapHost struct {
 
 // MapBackend is a deduplicated upstream node.
 type MapBackend struct {
-	ID   string `json:"id"`   // "olsyn-app:80", "host:51000", "supervised:…"
+	ID   string `json:"id"`   // "example-app:80", "host:51000", "supervised:…"
 	Kind string `json:"kind"` // address | host | supervised | service
 	Name string `json:"name"` // display
 	Sub  string `json:"sub"`  // secondary line (port / cmd)

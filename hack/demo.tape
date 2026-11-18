@@ -17,7 +17,7 @@ Sleep 1s
 Type "tmux set -g status off; tmux set -g pane-border-style fg=colour60"
 Enter
 Sleep 300ms
-Type `export PROMPT="%F{magenta}❯%f " && cd /private/tmp/claude-501/-Users-harrison-Documents-code-Olsyn/496cf998-69c0-4900-91af-eeb6d8812436/scratchpad/gif/coolapp && export PATH=/tmp:$PATH && rm -f gerrymander.yaml && clear`
+Type `export PROMPT="%F{magenta}❯%f " && demo_dir=$(mktemp -d) && mkdir "$demo_dir/coolapp" && cd "$demo_dir/coolapp" && echo '{"scripts":{"dev":"node server.cjs"}}' > package.json && echo 'require("node:http").createServer((req,res) => res.end("Hello from coolapp")).listen(Number(process.env.PORT), "127.0.0.1")' > server.cjs && clear`
 Enter
 Sleep 500ms
 Show

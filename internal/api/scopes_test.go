@@ -13,7 +13,7 @@ func TestOwnerTokenScope(t *testing.T) {
 
 	// mint an owner token via the admin API
 	resp, body := doJSON(t, "POST", ts.URL+"/v1/tokens", root,
-		`{"name":"tenant-a","scope":"owner","owner_ref":"tenant-a-uuid","zones":["olsyn.com"]}`)
+		`{"name":"tenant-a","scope":"owner","owner_ref":"tenant-a-uuid","zones":["example.com"]}`)
 	if resp.StatusCode != 201 {
 		t.Fatalf("create token: %d %v", resp.StatusCode, body)
 	}
@@ -21,7 +21,7 @@ func TestOwnerTokenScope(t *testing.T) {
 
 	// an admin-owned allocation the token must not touch
 	resp, other := doJSON(t, "POST", ts.URL+"/v1/claims", root,
-		`{"zone":"olsyn.com","label":"plumbus-other","kind":"tenant","source":"seed","owner_ref":"someone-else"}`)
+		`{"zone":"example.com","label":"plumbus-other","kind":"tenant","source":"seed","owner_ref":"someone-else"}`)
 	if resp.StatusCode != 201 {
 		t.Fatalf("seed claim: %d %v", resp.StatusCode, other)
 	}
@@ -29,7 +29,7 @@ func TestOwnerTokenScope(t *testing.T) {
 
 	// 1. owner claims for itself (owner_ref comes from the token)
 	resp, mine := doJSON(t, "POST", ts.URL+"/v1/claims", tok,
-		`{"zone":"olsyn.com","label":"plumbus-mine"}`)
+		`{"zone":"example.com","label":"plumbus-mine"}`)
 	if resp.StatusCode != 201 {
 		t.Fatalf("own claim: %d %v", resp.StatusCode, mine)
 	}
@@ -41,7 +41,7 @@ func TestOwnerTokenScope(t *testing.T) {
 
 	// 2. cannot claim for someone else
 	if resp, _ := doJSON(t, "POST", ts.URL+"/v1/claims", tok,
-		`{"zone":"olsyn.com","label":"plumbus-x","owner_ref":"someone-else"}`); resp.StatusCode != 403 {
+		`{"zone":"example.com","label":"plumbus-x","owner_ref":"someone-else"}`); resp.StatusCode != 403 {
 		t.Fatalf("cross-owner claim allowed: %d", resp.StatusCode)
 	}
 

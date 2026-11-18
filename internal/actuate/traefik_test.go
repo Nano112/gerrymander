@@ -8,18 +8,18 @@ import (
 )
 
 func TestRouteNameDeterministicAndSafe(t *testing.T) {
-	if RouteName("olsyn.com", "gv") != RouteName("olsyn.com", "gv") {
+	if RouteName("example.com", "demo") != RouteName("example.com", "demo") {
 		t.Fatal("not deterministic")
 	}
-	if RouteName("olsyn.com", "@") != "gerry-olsyn-com-apex" {
-		t.Fatalf("apex: %s", RouteName("olsyn.com", "@"))
+	if RouteName("example.com", "@") != "gerry-example-com-apex" {
+		t.Fatalf("apex: %s", RouteName("example.com", "@"))
 	}
 	n := RouteName(strings.Repeat("verylongzone.", 6)+"com", "some-label")
 	if len(n) > 63 {
 		t.Fatalf("name exceeds k8s limit: %d", len(n))
 	}
-	if RouteName("z.com", "*.cb.app") != "gerry-z-com-cb-app" {
-		t.Fatalf("wildcard label: %s", RouteName("z.com", "*.cb.app"))
+	if RouteName("z.com", "*.preview.app") != "gerry-z-com-preview-app" {
+		t.Fatalf("wildcard label: %s", RouteName("z.com", "*.preview.app"))
 	}
 }
 

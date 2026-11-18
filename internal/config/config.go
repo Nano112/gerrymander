@@ -113,7 +113,7 @@ type Config struct {
 	// marker in advanced_config; UI-made hosts are never touched).
 	NPMSync struct {
 		Enabled     bool          `yaml:"enabled"`
-		URL         string        `yaml:"url"`          // e.g. http://100.71.144.24:81
+		URL         string        `yaml:"url"`          // e.g. http://192.0.2.10:81
 		IdentityEnv string        `yaml:"identity_env"` // default NPM_IDENTITY
 		SecretEnv   string        `yaml:"secret_env"`   // default NPM_SECRET
 		LocalHost   string        `yaml:"local_host"`   // "@local" maps here; default host.docker.internal
